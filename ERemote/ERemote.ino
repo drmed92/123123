@@ -103,6 +103,11 @@ const uint32_t AP_HOLD_AFTER_STA = 180000UL;   // 3 min
 const bool     MANAGE_AP         = true;
 
 const uint16_t RECORD_TIMEOUT_MS = 15000;
+
+// AutoGenset: how often to scan for the generator's Wi-Fi network. Each scan
+// makes the radio hop channels for ~2 s, briefly stalling AP/STA traffic, so
+// don't go much lower than this.
+const uint32_t GS_SCAN_INTERVAL_MS = 30000;
 /* ------------------------------------------------------------------------- */
 
 // IR
@@ -118,7 +123,12 @@ DNSServer dnsServer;
 const byte DNS_PORT = 53;
 
 // Config held in RAM
-struct Config { String ssid, pass, tz = "Asia/Baghdad"; bool ntp = true; } cfg;
+struct Config {
+  String ssid, pass, tz = "Asia/Baghdad"; bool ntp = true;
+  // AutoGenset: when a network named gsSsid appears, send gsMode's IR code
+  // ("off"/"eco") after gsDelay seconds; "disabled" turns the feature off.
+  String gsMode = "disabled", gsSsid = "GENSET_ACTIVE"; uint16_t gsDelay = 3;
+} cfg;
 
 // Runtime state
 bool     provisioned   = false;
@@ -132,6 +142,12 @@ String   recordTarget  = "";     // "on"/"off"/"eco" while capturing
 uint32_t recordDeadline= 0;
 String   pendingSend   = "";     // queued transmit (non-blocking delay)
 uint32_t sendAt        = 0;
+
+// AutoGenset runtime state
+bool     gsPresent     = false;  // generator network currently visible
+bool     gsTriggered   = false;  // already fired for this appearance
+uint8_t  gsMiss        = 0;      // consecutive scans without the network
+uint32_t gsLastScanAt  = 0;
 
 // Double-reset detector (RTC memory survives reset, not power loss)
 const uint32_t DRD_MAGIC   = 0xE12E0007;
@@ -157,12 +173,14 @@ void applyTime(){
 void saveConfig(){
   JsonDocument d;
   d["ssid"]=cfg.ssid; d["pass"]=cfg.pass; d["tz"]=cfg.tz; d["ntp"]=cfg.ntp;
+  d["gsMode"]=cfg.gsMode; d["gsSsid"]=cfg.gsSsid; d["gsDelay"]=cfg.gsDelay;
   File f=LittleFS.open("/config.json","w"); if(f){ serializeJson(d,f); f.close(); }
 }
 void loadConfig(){
   File f=LittleFS.open("/config.json","r"); if(!f) return;
   JsonDocument d; if(deserializeJson(d,f)==DeserializationError::Ok){
     cfg.ssid=d["ssid"]|""; cfg.pass=d["pass"]|""; cfg.tz=d["tz"]|"Asia/Baghdad"; cfg.ntp=d["ntp"]|true;
+    cfg.gsMode=d["gsMode"]|"disabled"; cfg.gsSsid=d["gsSsid"]|"GENSET_ACTIVE"; cfg.gsDelay=d["gsDelay"]|3;
     provisioned=true;
   }
   f.close();
@@ -273,6 +291,11 @@ void handleStatus(){
   d["time"]["ntp"]=cfg.ntp;
   d["time"]["tz"]=cfg.tz;
 
+  d["genset"]["mode"]=cfg.gsMode;
+  d["genset"]["ssid"]=cfg.gsSsid;
+  d["genset"]["delay"]=cfg.gsDelay;
+  d["genset"]["detected"]=gsPresent;
+
   JsonDocument sd; readSched(sd);
   d["schedules"]=sd.as<JsonArray>();
 
@@ -317,6 +340,18 @@ void handleTime(){
   cfg.ntp=d["ntp"]|true; cfg.tz=(const char*)(d["tz"]|"Asia/Baghdad"); saveConfig();
   if(cfg.ntp){ timeValid=false; applyTime(); }
   else if(d["iso"].is<const char*>()) setManualTime(d["iso"]);
+  sendJson(200,"{\"ok\":true}");
+}
+
+void handleGenset(){
+  JsonDocument d; if(!bodyJson(d)){ sendJson(400,"{\"ok\":false}"); return; }
+  String m=(const char*)(d["mode"]|"disabled");
+  cfg.gsMode=(m=="off"||m=="eco") ? m : "disabled";
+  cfg.gsDelay=d["delay"]|3;
+  cfg.gsSsid=(const char*)(d["ssid"]|"GENSET_ACTIVE");
+  if(!cfg.gsSsid.length()) cfg.gsSsid="GENSET_ACTIVE";
+  saveConfig();
+  gsPresent=false; gsTriggered=false; gsMiss=0;   // re-arm with new settings
   sendJson(200,"{\"ok\":true}");
 }
 
@@ -395,6 +430,35 @@ void checkSchedules(){
   }
 }
 
+void gensetTask(){
+  if(cfg.gsMode!="off" && cfg.gsMode!="eco"){        // feature disabled
+    gsPresent=false; gsTriggered=false; return;
+  }
+  int n=WiFi.scanComplete();
+  if(n>=0){                                          // a scan just finished
+    bool found=false;
+    for(int i=0;i<n;i++) if(WiFi.SSID(i)==cfg.gsSsid){ found=true; break; }
+    WiFi.scanDelete();
+    if(found){
+      gsMiss=0;
+      if(!gsPresent){                                // generator just came on
+        gsPresent=true;
+        if(!gsTriggered && LittleFS.exists(irPath(cfg.gsMode))){
+          pendingSend=cfg.gsMode;
+          sendAt=millis()+cfg.gsDelay*1000UL;
+          gsTriggered=true;
+        }
+      }
+    } else if(gsPresent && ++gsMiss>=2){             // gone for 2 scans -> re-arm
+      gsPresent=false; gsTriggered=false; gsMiss=0;
+    }
+  } else if(n!=WIFI_SCAN_RUNNING &&
+            millis()-gsLastScanAt>GS_SCAN_INTERVAL_MS){
+    gsLastScanAt=millis();
+    WiFi.scanNetworks(true, true);                   // async, include hidden
+  }
+}
+
 /* --------------------------------- DRD ---------------------------------- */
 void handleDRD(){
   uint32_t flag=0; ESP.rtcUserMemoryRead(0,&flag,sizeof(flag));
@@ -446,6 +510,7 @@ void setup(){
   server.on("/api/wifi",      HTTP_POST,   handleWifiSave);
   server.on("/api/wifi",      HTTP_DELETE, handleWifiForget);
   server.on("/api/time",      HTTP_POST,   handleTime);
+  server.on("/api/genset",    HTTP_POST,   handleGenset);
   server.on("/api/schedule",  HTTP_GET,    handleSchedGet);
   server.on("/api/schedule",  HTTP_POST,   handleSchedPost);
   server.on("/api/schedule",  HTTP_DELETE, handleSchedDel);
@@ -465,5 +530,6 @@ void loop(){
   if(!timeValid && time(nullptr)>100000) timeValid=true;
   manageAP();
   checkSchedules();
+  gensetTask();
   clearDRD();
 }

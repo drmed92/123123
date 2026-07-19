@@ -58,6 +58,7 @@ padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
 .kv span:first-child{color:var(--mut)}
 .radio{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px}
 .radio input{width:auto;margin:0}
+.desc{font-size:13px;color:var(--mut);margin:0 0 10px;line-height:1.5}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
 background:#1e293b;border:1px solid var(--line);color:var(--txt);padding:11px 18px;
 border-radius:12px;font-size:14px;display:none;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.5)}
@@ -83,6 +84,25 @@ border-radius:12px;font-size:14px;display:none;max-width:90vw;box-shadow:0 8px 2
     <div class="acts"><button onclick="doSend('eco')" data-k="send"></button>
     <button class="sec" onclick="doRec('eco')" data-k="rec"></button></div></div>
   <div class="msg" id="recmsg"></div>
+</section>
+
+<section>
+  <h2 data-k="genset"></h2>
+  <p class="desc" data-k="gsDesc"></p>
+  <div class="kv"><span data-k="status"></span><span id="gdet">-</span></div>
+  <div style="margin-top:8px">
+    <div class="radio"><input type="radio" name="gs" id="gs_dis" value="disabled" checked>
+      <label for="gs_dis" style="margin:0" data-k="gsDis"></label></div>
+    <div class="radio"><input type="radio" name="gs" id="gs_off" value="off">
+      <label for="gs_off" style="margin:0" data-k="gsOff"></label></div>
+    <div class="radio"><input type="radio" name="gs" id="gs_eco" value="eco">
+      <label for="gs_eco" style="margin:0" data-k="gsEco"></label></div>
+    <label data-k="gsDelay"></label>
+    <select id="g_delay"></select>
+    <label data-k="gsSsid"></label>
+    <input id="g_ssid" maxlength="32" value="GENSET_ACTIVE">
+    <button style="width:100%" onclick="gsSave()" data-k="save"></button>
+  </div>
 </section>
 
 <section>
@@ -148,6 +168,12 @@ recOk:'Code recorded!',recFail:'Nothing received — try again.',
 queued:'Sending in 3 seconds — make sure the device faces the AC.',
 schedules:'Schedules',action:'Action',at:'Time',days:'Days',add:'Add schedule',
 none:'No schedules yet.',pickDay:'Pick at least one day.',
+genset:'AutoGenset',
+gsDesc:"When the generator's Wi-Fi network appears (neighborhood genset switched on), the device automatically sends a command to the AC.",
+gsDis:'Disabled',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
+gsDelay:'Delay before sending',gsSsid:'Generator network name',
+gsDet:'Generator detected',gsNo:'Not detected',
+delayS:['3 seconds','5 seconds','10 seconds','15 seconds','30 seconds','1 minute','2 minutes','5 minutes'],
 wifi:'Wi-Fi',status:'Status',conn:'Connected',noconn:'Not connected',
 ssid:'Network name (SSID)',pass:'Password',save:'Save',forget:'Forget network',
 time:'Time & clock',devtime:'Device time',ntp:'Automatic (internet time)',
@@ -165,6 +191,12 @@ recOk:'تم تسجيل الكود!',recFail:'لم يصل شيء — حاول م�
 queued:'سيتم الإرسال خلال ٣ ثوانٍ — تأكد أن الجهاز موجَّه نحو المكيف.',
 schedules:'الجدولة',action:'الإجراء',at:'الوقت',days:'الأيام',add:'إضافة جدولة',
 none:'لا توجد جدولات بعد.',pickDay:'اختر يوماً واحداً على الأقل.',
+genset:'كشف المولّدة تلقائياً',
+gsDesc:'عند ظهور شبكة واي فاي المولّدة (تشغيل مولّدة الحي)، يرسل الجهاز أمراً للمكيف تلقائياً.',
+gsDis:'معطَّل',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
+gsDelay:'التأخير قبل الإرسال',gsSsid:'اسم شبكة المولّدة',
+gsDet:'تم كشف المولّدة',gsNo:'غير مكشوفة',
+delayS:['٣ ثوانٍ','٥ ثوانٍ','١٠ ثوانٍ','١٥ ثانية','٣٠ ثانية','دقيقة واحدة','دقيقتان','٥ دقائق'],
 wifi:'الواي فاي',status:'الحالة',conn:'متصل',noconn:'غير متصل',
 ssid:'اسم الشبكة (SSID)',pass:'كلمة المرور',save:'حفظ',forget:'نسيان الشبكة',
 time:'الوقت والساعة',devtime:'وقت الجهاز',ntp:'تلقائي (وقت الإنترنت)',
@@ -176,6 +208,7 @@ saved:'تم الحفظ.',err:'خطأ — حاول مجدداً.',lang:'EN',
 dayS:['أحد','إثن','ثلا','أرب','خمي','جمع','سبت'],
 actS:{on:'تشغيل',off:'إطفاء',eco:'اقتصادي'}}};
 var L='ar',ST=null,selDays=[];
+var DELAYS=[3,5,10,15,30,60,120,300];   // seconds; labels come from delayS
 
 function t(k){return D[L][k]}
 function $(id){return document.getElementById(id)}
@@ -187,6 +220,10 @@ document.documentElement.lang=l;document.documentElement.dir=(l=='ar')?'rtl':'lt
 var els=document.querySelectorAll('[data-k]');
 for(var i=0;i<els.length;i++)els[i].textContent=t(els[i].getAttribute('data-k'));
 $('lang').textContent=t('lang');
+var gd=$('g_delay'),cur=gd.value;gd.innerHTML='';
+DELAYS.forEach(function(v,i){var o=document.createElement('option');
+o.value=v;o.textContent=t('delayS')[i];gd.appendChild(o)});
+if(cur)gd.value=cur;
 renderDays();render()}
 
 function renderDays(){var b=$('s_days');b.innerHTML='';
@@ -206,6 +243,11 @@ if(!$('w_ssid').value&&w.ssid)$('w_ssid').value=w.ssid;
 var tt=ST.time||{};
 $('now').textContent=tt.valid?new Date(tt.epoch*1000).toLocaleString(L=='ar'?'ar':'en-GB'):'--:--';
 $('clock').textContent=$('now').textContent;
+var g=ST.genset||{};
+if(g.mode=='off'||g.mode=='eco'){
+$('gdet').textContent=g.detected?t('gsDet'):t('gsNo');
+$('gdet').style.color=g.detected?'var(--warn)':'var(--mut)';
+}else{$('gdet').textContent='—';$('gdet').style.color='var(--mut)'}
 var sl=$('slist');sl.innerHTML='';var arr=ST.schedules||[];
 if(!arr.length){sl.innerHTML='<div class="empty">'+t('none')+'</div>';return}
 arr.forEach(function(s){var d=document.createElement('div');d.className='sched';
@@ -220,7 +262,11 @@ var first=true;
 async function refresh(){try{var r=await fetch('/api/status');ST=await r.json();
 if(first){first=false;var tt=ST.time||{};
 if(tt.tz)$('t_tz').value=tt.tz;
-$('tm_ntp').checked=!!tt.ntp;$('tm_man').checked=!tt.ntp;manualBox()}
+$('tm_ntp').checked=!!tt.ntp;$('tm_man').checked=!tt.ntp;manualBox();
+var g=ST.genset||{};
+var el=$('gs_'+(g.mode=='off'?'off':g.mode=='eco'?'eco':'dis'));if(el)el.checked=true;
+if(g.delay&&DELAYS.indexOf(g.delay)>=0)$('g_delay').value=g.delay;
+if(g.ssid)$('g_ssid').value=g.ssid}
 render()}catch(e){}}
 
 async function doSend(b){if(ST&&ST.codes&&ST.codes[b]&&!ST.codes[b].set){toast(t('noCode'));return}
@@ -250,6 +296,12 @@ body:JSON.stringify({ssid:$('w_ssid').value,pass:$('w_pass').value})});
 toast(r.ok?t('saved'):t('err'));setTimeout(refresh,4000)}catch(e){toast(t('err'))}}
 async function wifiForget(){try{await fetch('/api/wifi',{method:'DELETE'});
 $('w_ssid').value='';$('w_pass').value='';toast(t('saved'));refresh()}catch(e){toast(t('err'))}}
+
+async function gsSave(){
+var m=document.querySelector('input[name="gs"]:checked').value;
+try{var r=await fetch('/api/genset',{method:'POST',body:JSON.stringify(
+{mode:m,delay:+$('g_delay').value,ssid:$('g_ssid').value||'GENSET_ACTIVE'})});
+toast(r.ok?t('saved'):t('err'));setTimeout(refresh,500)}catch(e){toast(t('err'))}}
 
 function manualBox(){$('manbox').style.display=$('tm_man').checked?'block':'none'}
 async function timeSave(){var body={ntp:$('tm_ntp').checked,tz:$('t_tz').value};
