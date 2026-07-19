@@ -35,7 +35,7 @@
    forward prototypes for functions only, never for variables, so a global
    defined below its first use fails with "not declared in this scope". */
 const char SETUP_HTML[] PROGMEM = R"SETUP(
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ERemote setup</title><style>
 :root{--b:#0f766e;--b2:#0ea5a4}*{box-sizing:border-box}
@@ -69,12 +69,12 @@ go:'Initialize device',busy:'Setting up…',ok:'Ready! Loading portal…',lang:'
 ar:{t1:'أهلاً بك في ERemote',
 t2:'لنقم بإعداد جهاز التحكم الذكي بالمكيف. هذه الخطوة تُنشئ ذاكرة الجهاز حتى تبقى الأكواد وشبكة الواي فاي والجداول محفوظة بعد انقطاع الكهرباء.',
 go:'تهيئة الجهاز',busy:'جارٍ الإعداد…',ok:'تم! جارٍ فتح لوحة التحكم…',lang:'EN'}};
-var L='en';
+var L='ar';
 function setLang(l){L=l;try{localStorage.setItem('erl',l)}catch(e){}
 document.documentElement.lang=l;document.documentElement.dir=(l=='ar')?'rtl':'ltr';
 var d=D[l];t1.textContent=d.t1;t2.textContent=d.t2;go.textContent=d.go;
 ok.textContent=d.ok;lang.textContent=d.lang;}
-var s='en';try{s=localStorage.getItem('erl')||'en'}catch(e){}setLang(s);
+var s='ar';try{s=localStorage.getItem('erl')||'ar'}catch(e){}setLang(s);
 async function init(){var b=document.getElementById('go');b.disabled=true;b.textContent=D[L].busy;
 try{await fetch('/api/init',{method:'POST'});}catch(e){}
 document.getElementById('ok').style.display='block';setTimeout(function(){location.href='/';},900);}
