@@ -95,8 +95,6 @@ const uint8_t AP_CHANNEL  = 6;
 // drop toward 10 if you want a weaker AP, but STA range to your router drops too.
 const float  WIFI_TX_POWER = 17.0;
 
-// AC readiness: some units ignore IR for a few seconds after mains power.
-const uint16_t PRE_SEND_DELAY_MS = 3000;   // wait before EVERY transmit
 const uint32_t BOOT_GRACE_MS     = 8000;   // no *scheduled* send this soon after boot
 
 // Keep the AP alive this long after the router link comes up, then drop it
@@ -340,8 +338,8 @@ void handleRecord(){
 void handleSend(){
   String b=server.arg("btn");
   if(!validBtn(b) || !LittleFS.exists(irPath(b))){ sendJson(400,"{\"ok\":false}"); return; }
-  pendingSend=b; sendAt=millis()+PRE_SEND_DELAY_MS;   // queued; loop() fires it
-  sendJson(200, "{\"ok\":true,\"delay\":"+String(PRE_SEND_DELAY_MS)+"}");
+  pendingSend=b; sendAt=millis();          // immediate; loop() fires it
+  sendJson(200, "{\"ok\":true}");
 }
 
 void handleWifiSave(){
@@ -464,7 +462,7 @@ void checkSchedules(){
     bool today=false; for(JsonVariant v:s["days"].as<JsonArray>()) if((int)v==lt->tm_wday){ today=true; break; }
     if(!today) continue;
     String b=(const char*)(s["action"]|"on");   // "on"/"off"
-    if(LittleFS.exists(irPath(b))){ pendingSend=b; sendAt=millis()+PRE_SEND_DELAY_MS; }
+    if(LittleFS.exists(irPath(b))){ pendingSend=b; sendAt=millis(); }
   }
 }
 
