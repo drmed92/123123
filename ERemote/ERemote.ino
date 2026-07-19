@@ -110,9 +110,22 @@ const uint16_t RECORD_TIMEOUT_MS = 15000;
 const uint32_t GS_SCAN_INTERVAL_MS = 30000;
 /* ------------------------------------------------------------------------- */
 
-// IR
-const uint16_t kCaptureBufferSize = 1024;   // AC frames are long
-const uint8_t  kTimeout           = 50;     // ms of gap = end of frame
+// IR capture. (IRremoteESP8266 equivalents of Arduino-IRremote's
+// RAW_BUFFER_LENGTH and RECORD_GAP_MICROS, already sized for AC remotes.)
+const uint16_t kCaptureBufferSize = 1536;   // timing entries; long AC frames +
+                                            // doubled frames (Midea repeats
+                                            // with ~5.1ms gap) fit with room
+const uint8_t  kTimeout           = 50;     // ms of silence = end of frame;
+                                            // above Gree's ~20ms mid-frame gap
+                                            // and Midea's inter-frame gap, so
+                                            // multi-part frames stay in one
+                                            // capture (library max is 130)
+const uint8_t  kTolerancePct      = 35;     // %; default 25. Looser matching so
+                                            // off-spec remotes (Tossot/clones)
+                                            // still get their protocol named
+const uint16_t kMinFrameLen       = 40;     // reject shorter bursts while
+                                            // recording: repeat codes / noise,
+                                            // never a real AC command
 IRrecv irrecv(IR_RX_PIN, kCaptureBufferSize, kTimeout, true);
 IRsend irsend(IR_TX_PIN);
 decode_results results;
@@ -140,6 +153,10 @@ int      lastSchedKey  = -1;
 
 String   recordTarget  = "";     // "on"/"off"/"eco" while capturing
 uint32_t recordDeadline= 0;
+String   lastCapBtn    = "";     // diagnostics for the portal: last capture's
+String   lastCapProto  = "";     // button, detected protocol, pulse count,
+uint16_t lastCapLen    = 0;      // and whether the buffer overflowed
+bool     lastCapOvf    = false;
 String   pendingSend   = "";     // queued transmit (non-blocking delay)
 uint32_t sendAt        = 0;
 
@@ -187,8 +204,9 @@ void loadConfig(){
 }
 
 /* ------------------------------- IR store ------------------------------- */
-void saveIR(const String& b, const uint16_t* raw, uint16_t len){
-  JsonDocument d; d["freq"]=38; JsonArray a=d["raw"].to<JsonArray>();
+void saveIR(const String& b, const uint16_t* raw, uint16_t len, const String& proto){
+  JsonDocument d; d["freq"]=38; d["proto"]=proto;
+  JsonArray a=d["raw"].to<JsonArray>();
   for(uint16_t i=0;i<len;i++) a.add(raw[i]);
   File f=LittleFS.open(irPath(b),"w"); if(f){ serializeJson(d,f); f.close(); }
 }
@@ -296,6 +314,11 @@ void handleStatus(){
   d["genset"]["delay"]=cfg.gsDelay;
   d["genset"]["detected"]=gsPresent;
 
+  d["lastCapture"]["btn"]=lastCapBtn;
+  d["lastCapture"]["proto"]=lastCapProto;
+  d["lastCapture"]["len"]=lastCapLen;
+  d["lastCapture"]["overflow"]=lastCapOvf;
+
   JsonDocument sd; readSched(sd);
   d["schedules"]=sd.as<JsonArray>();
 
@@ -396,9 +419,20 @@ void captureIR(){
   if(irrecv.decode(&results)){
     if(recordTarget!=""){
       uint16_t len=getCorrectedRawLength(&results);
-      uint16_t* raw=resultToRawArray(&results);
-      if(raw){ saveIR(recordTarget,raw,len); delete[] raw; }
-      recordTarget="";
+      if(results.overflow){
+        // Truncated frame would replay garbage: report it, keep listening.
+        lastCapBtn=recordTarget; lastCapProto=""; lastCapLen=len; lastCapOvf=true;
+      } else if(len<kMinFrameLen){
+        // Stray repeat code or noise burst, not an AC command: keep listening.
+      } else {
+        uint16_t* raw=resultToRawArray(&results);
+        if(raw){
+          String proto=typeToString(results.decode_type);
+          saveIR(recordTarget,raw,len,proto); delete[] raw;
+          lastCapBtn=recordTarget; lastCapProto=proto; lastCapLen=len; lastCapOvf=false;
+          recordTarget="";
+        }
+      }
     }
     irrecv.resume();
   }
@@ -488,6 +522,7 @@ void setup(){
   connectSTA();
 
   irsend.begin();
+  irrecv.setTolerance(kTolerancePct);
   irrecv.enableIRIn();
 
   applyTime();
