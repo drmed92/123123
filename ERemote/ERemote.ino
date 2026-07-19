@@ -10,6 +10,8 @@
      - Normal boot -> serves the full control portal (portal_html.h, in flash).
      - Always AP+STA: open AP "ERemote" for the phone; STA joins the router
        (entered in the portal) for NTP time + internet.
+     - Portal address on the AP: http://4.4.4.4  (chosen because it's short
+       and easy to tell customers to type when the captive popup doesn't show).
      - Records raw IR frames from the AC remote (reliable for AC protocols)
        and replays them on schedule or on demand.
 
@@ -35,32 +37,47 @@
    forward prototypes for functions only, never for variables, so a global
    defined below its first use fails with "not declared in this scope". */
 const char SETUP_HTML[] PROGMEM = R"SETUP(
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ERemote setup</title><style>
 :root{--b:#0f766e;--b2:#0ea5a4}*{box-sizing:border-box}
-body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Tahoma,sans-serif;
 background:#0b1220;color:#e6edf5;display:grid;place-items:center;min-height:100vh;padding:24px}
 .card{max-width:380px;width:100%;background:#131c2b;border:1px solid #243244;border-radius:20px;
-padding:28px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+padding:28px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.4);position:relative}
 .logo{width:56px;height:56px;border-radius:16px;margin:0 auto 14px;
 background:linear-gradient(135deg,var(--b),var(--b2));display:grid;place-items:center}
 .logo svg{width:30px;height:30px;color:#fff}
-h1{font-size:20px;margin:0 0 6px}p{color:#93a1b5;font-size:14px;line-height:1.5;margin:0 0 22px}
-button{width:100%;border:0;border-radius:14px;padding:14px;font-size:15px;font-weight:700;
+h1{font-size:20px;margin:0 0 6px}p{color:#93a1b5;font-size:14px;line-height:1.6;margin:0 0 22px}
+button{border:0;border-radius:14px;padding:14px;font-size:15px;font-weight:700;
 color:#fff;background:var(--b);cursor:pointer;font-family:inherit}
+#go{width:100%}
 button:disabled{opacity:.6}.ok{color:#86efac;font-weight:600;margin-top:14px;display:none}
+.lang{position:absolute;top:14px;inset-inline-end:14px;padding:6px 14px;font-size:13px;
+font-weight:600;background:#243244;border-radius:10px}
 </style></head><body><div class="card">
+<button class="lang" id="lang" onclick="setLang(L=='en'?'ar':'en')">عربي</button>
 <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
 stroke-linecap="round"><path d="M4 6h16v9H4z"/><path d="M8 19h8M12 15v4"/><circle cx="8" cy="10.5" r="1"/>
 <path d="M12 9v3M16 9v3"/></svg></div>
-<h1>Welcome to ERemote</h1>
-<p>Let's set up your smart AC remote. This creates the device's storage so your
-codes, Wi-Fi and schedules survive power loss.</p>
-<button id="go" onclick="init()">Initialize device</button>
-<div class="ok" id="ok">Ready! Loading portal…</div>
+<h1 id="t1"></h1>
+<p id="t2"></p>
+<button id="go" onclick="init()"></button>
+<div class="ok" id="ok"></div>
 </div><script>
-async function init(){var b=document.getElementById('go');b.disabled=true;b.textContent='Setting up…';
+var D={en:{t1:'Welcome to ERemote',
+t2:"Let's set up your smart AC remote. This creates the device's storage so your codes, Wi-Fi and schedules survive power loss.",
+go:'Initialize device',busy:'Setting up…',ok:'Ready! Loading portal…',lang:'عربي'},
+ar:{t1:'أهلاً بك في ERemote',
+t2:'لنقم بإعداد جهاز التحكم الذكي بالمكيف. هذه الخطوة تُنشئ ذاكرة الجهاز حتى تبقى الأكواد وشبكة الواي فاي والجداول محفوظة بعد انقطاع الكهرباء.',
+go:'تهيئة الجهاز',busy:'جارٍ الإعداد…',ok:'تم! جارٍ فتح لوحة التحكم…',lang:'EN'}};
+var L='ar';
+function setLang(l){L=l;try{localStorage.setItem('erl',l)}catch(e){}
+document.documentElement.lang=l;document.documentElement.dir=(l=='ar')?'rtl':'ltr';
+var d=D[l];t1.textContent=d.t1;t2.textContent=d.t2;go.textContent=d.go;
+ok.textContent=d.ok;lang.textContent=d.lang;}
+var s='ar';try{s=localStorage.getItem('erl')||'ar'}catch(e){}setLang(s);
+async function init(){var b=document.getElementById('go');b.disabled=true;b.textContent=D[L].busy;
 try{await fetch('/api/init',{method:'POST'});}catch(e){}
 document.getElementById('ok').style.display='block';setTimeout(function(){location.href='/';},900);}
 </script></body></html>
@@ -78,8 +95,6 @@ const uint8_t AP_CHANNEL  = 6;
 // drop toward 10 if you want a weaker AP, but STA range to your router drops too.
 const float  WIFI_TX_POWER = 17.0;
 
-// AC readiness: some units ignore IR for a few seconds after mains power.
-const uint16_t PRE_SEND_DELAY_MS = 3000;   // wait before EVERY transmit
 const uint32_t BOOT_GRACE_MS     = 8000;   // no *scheduled* send this soon after boot
 
 // Keep the AP alive this long after the router link comes up, then drop it
@@ -88,11 +103,29 @@ const uint32_t AP_HOLD_AFTER_STA = 180000UL;   // 3 min
 const bool     MANAGE_AP         = true;
 
 const uint16_t RECORD_TIMEOUT_MS = 15000;
+
+// AutoGenset: how often to scan for the generator's Wi-Fi network. Each scan
+// makes the radio hop channels for ~2 s, briefly stalling AP/STA traffic, so
+// don't go much lower than this.
+const uint32_t GS_SCAN_INTERVAL_MS = 30000;
 /* ------------------------------------------------------------------------- */
 
-// IR
-const uint16_t kCaptureBufferSize = 1024;   // AC frames are long
-const uint8_t  kTimeout           = 50;     // ms of gap = end of frame
+// IR capture. (IRremoteESP8266 equivalents of Arduino-IRremote's
+// RAW_BUFFER_LENGTH and RECORD_GAP_MICROS, already sized for AC remotes.)
+const uint16_t kCaptureBufferSize = 1536;   // timing entries; long AC frames +
+                                            // doubled frames (Midea repeats
+                                            // with ~5.1ms gap) fit with room
+const uint8_t  kTimeout           = 50;     // ms of silence = end of frame;
+                                            // above Gree's ~20ms mid-frame gap
+                                            // and Midea's inter-frame gap, so
+                                            // multi-part frames stay in one
+                                            // capture (library max is 130)
+const uint8_t  kTolerancePct      = 35;     // %; default 25. Looser matching so
+                                            // off-spec remotes (Tossot/clones)
+                                            // still get their protocol named
+const uint16_t kMinFrameLen       = 40;     // reject shorter bursts while
+                                            // recording: repeat codes / noise,
+                                            // never a real AC command
 IRrecv irrecv(IR_RX_PIN, kCaptureBufferSize, kTimeout, true);
 IRsend irsend(IR_TX_PIN);
 decode_results results;
@@ -103,7 +136,12 @@ DNSServer dnsServer;
 const byte DNS_PORT = 53;
 
 // Config held in RAM
-struct Config { String ssid, pass, tz = "Asia/Baghdad"; bool ntp = true; } cfg;
+struct Config {
+  String ssid, pass, tz = "Asia/Baghdad"; bool ntp = true;
+  // AutoGenset: when a network named gsSsid appears, send gsMode's IR code
+  // ("off"/"eco") after gsDelay seconds; "disabled" turns the feature off.
+  String gsMode = "disabled", gsSsid = "GENSET_ACTIVE"; uint16_t gsDelay = 3;
+} cfg;
 
 // Runtime state
 bool     provisioned   = false;
@@ -115,8 +153,18 @@ int      lastSchedKey  = -1;
 
 String   recordTarget  = "";     // "on"/"off"/"eco" while capturing
 uint32_t recordDeadline= 0;
+String   lastCapBtn    = "";     // diagnostics for the portal: last capture's
+String   lastCapProto  = "";     // button, detected protocol, pulse count,
+uint16_t lastCapLen    = 0;      // and whether the buffer overflowed
+bool     lastCapOvf    = false;
 String   pendingSend   = "";     // queued transmit (non-blocking delay)
 uint32_t sendAt        = 0;
+
+// AutoGenset runtime state
+bool     gsPresent     = false;  // generator network currently visible
+bool     gsTriggered   = false;  // already fired for this appearance
+uint8_t  gsMiss        = 0;      // consecutive scans without the network
+uint32_t gsLastScanAt  = 0;
 
 // Double-reset detector (RTC memory survives reset, not power loss)
 const uint32_t DRD_MAGIC   = 0xE12E0007;
@@ -142,20 +190,23 @@ void applyTime(){
 void saveConfig(){
   JsonDocument d;
   d["ssid"]=cfg.ssid; d["pass"]=cfg.pass; d["tz"]=cfg.tz; d["ntp"]=cfg.ntp;
+  d["gsMode"]=cfg.gsMode; d["gsSsid"]=cfg.gsSsid; d["gsDelay"]=cfg.gsDelay;
   File f=LittleFS.open("/config.json","w"); if(f){ serializeJson(d,f); f.close(); }
 }
 void loadConfig(){
   File f=LittleFS.open("/config.json","r"); if(!f) return;
   JsonDocument d; if(deserializeJson(d,f)==DeserializationError::Ok){
     cfg.ssid=d["ssid"]|""; cfg.pass=d["pass"]|""; cfg.tz=d["tz"]|"Asia/Baghdad"; cfg.ntp=d["ntp"]|true;
+    cfg.gsMode=d["gsMode"]|"disabled"; cfg.gsSsid=d["gsSsid"]|"GENSET_ACTIVE"; cfg.gsDelay=d["gsDelay"]|3;
     provisioned=true;
   }
   f.close();
 }
 
 /* ------------------------------- IR store ------------------------------- */
-void saveIR(const String& b, const uint16_t* raw, uint16_t len){
-  JsonDocument d; d["freq"]=38; JsonArray a=d["raw"].to<JsonArray>();
+void saveIR(const String& b, const uint16_t* raw, uint16_t len, const String& proto){
+  JsonDocument d; d["freq"]=38; d["proto"]=proto;
+  JsonArray a=d["raw"].to<JsonArray>();
   for(uint16_t i=0;i<len;i++) a.add(raw[i]);
   File f=LittleFS.open(irPath(b),"w"); if(f){ serializeJson(d,f); f.close(); }
 }
@@ -184,7 +235,15 @@ void writeSched(JsonDocument& d){
 
 /* ------------------------------- WiFi ----------------------------------- */
 void startAP(){
+  // Explicit AP addressing: guarantees the DHCP server advertises us as
+  // gateway AND DNS server, which the captive-portal hijack depends on.
+  // 4.4.4.4 on purpose: short enough to tell customers to type into their
+  // browser when the automatic captive popup doesn't appear.
+  IPAddress apIP(4,4,4,4);
+  WiFi.softAPConfig(apIP, apIP, IPAddress(255,255,255,0));
   WiFi.softAP(AP_SSID, nullptr, AP_CHANNEL);   // open network
+  dnsServer.setTTL(0);                          // don't let phones cache answers
+  dnsServer.start(DNS_PORT, "*", apIP);         // every hostname -> us
   apOn=true;
 }
 void connectSTA(){
@@ -194,11 +253,30 @@ void manageAP(){
   if(!MANAGE_AP) return;
   if(WiFi.status()==WL_CONNECTED){
     if(staConnectedAt==0) staConnectedAt=millis();
-    if(apOn && millis()-staConnectedAt>AP_HOLD_AFTER_STA){ WiFi.softAPdisconnect(true); apOn=false; }
+    if(apOn && millis()-staConnectedAt>AP_HOLD_AFTER_STA){ dnsServer.stop(); WiFi.softAPdisconnect(true); apOn=false; }
   } else {
     staConnectedAt=0;
     if(!apOn){ startAP(); }   // router lost -> bring AP back so the portal stays reachable
   }
+}
+
+/* ------------------------- captive portal probes -------------------------
+   Phones decide whether to pop the "sign in to network" page by fetching a
+   known URL and checking the answer (Android expects HTTP 204, Apple expects
+   the word "Success", Windows expects "Microsoft NCSI"). Our DNS hijack sends
+   those requests here; answering with a redirect to our own IP (and closing
+   the socket, which some Android builds require) triggers the portal popup. */
+void redirectToSelf(){
+  // Redirect to the IP of whichever interface (AP or STA) the client used.
+  IPAddress ip = server.client().localIP();
+  server.sendHeader("Location", String("http://") + ip.toString() + "/", true);
+  server.send(302, "text/html", "");
+  server.client().stop();
+}
+bool isSelfHost(){
+  String h = server.hostHeader();
+  int c = h.indexOf(':'); if(c >= 0) h = h.substring(0, c);   // strip :port
+  return h == server.client().localIP().toString() || h == "eremote" || h == "eremote.local";
 }
 
 /* ============================ HTTP handlers ============================== */
@@ -233,6 +311,16 @@ void handleStatus(){
   d["time"]["ntp"]=cfg.ntp;
   d["time"]["tz"]=cfg.tz;
 
+  d["genset"]["mode"]=cfg.gsMode;
+  d["genset"]["ssid"]=cfg.gsSsid;
+  d["genset"]["delay"]=cfg.gsDelay;
+  d["genset"]["detected"]=gsPresent;
+
+  d["lastCapture"]["btn"]=lastCapBtn;
+  d["lastCapture"]["proto"]=lastCapProto;
+  d["lastCapture"]["len"]=lastCapLen;
+  d["lastCapture"]["overflow"]=lastCapOvf;
+
   JsonDocument sd; readSched(sd);
   d["schedules"]=sd.as<JsonArray>();
 
@@ -250,8 +338,8 @@ void handleRecord(){
 void handleSend(){
   String b=server.arg("btn");
   if(!validBtn(b) || !LittleFS.exists(irPath(b))){ sendJson(400,"{\"ok\":false}"); return; }
-  pendingSend=b; sendAt=millis()+PRE_SEND_DELAY_MS;   // queued; loop() fires it
-  sendJson(200, "{\"ok\":true,\"delay\":"+String(PRE_SEND_DELAY_MS)+"}");
+  pendingSend=b; sendAt=millis();          // immediate; loop() fires it
+  sendJson(200, "{\"ok\":true}");
 }
 
 void handleWifiSave(){
@@ -277,6 +365,18 @@ void handleTime(){
   cfg.ntp=d["ntp"]|true; cfg.tz=(const char*)(d["tz"]|"Asia/Baghdad"); saveConfig();
   if(cfg.ntp){ timeValid=false; applyTime(); }
   else if(d["iso"].is<const char*>()) setManualTime(d["iso"]);
+  sendJson(200,"{\"ok\":true}");
+}
+
+void handleGenset(){
+  JsonDocument d; if(!bodyJson(d)){ sendJson(400,"{\"ok\":false}"); return; }
+  String m=(const char*)(d["mode"]|"disabled");
+  cfg.gsMode=(m=="off"||m=="eco") ? m : "disabled";
+  cfg.gsDelay=d["delay"]|3;
+  cfg.gsSsid=(const char*)(d["ssid"]|"GENSET_ACTIVE");
+  if(!cfg.gsSsid.length()) cfg.gsSsid="GENSET_ACTIVE";
+  saveConfig();
+  gsPresent=false; gsTriggered=false; gsMiss=0;   // re-arm with new settings
   sendJson(200,"{\"ok\":true}");
 }
 
@@ -311,9 +411,9 @@ void handleReset(){
   delay(150); LittleFS.format(); ESP.restart();
 }
 
-void handleNotFound(){                    // captive portal: bounce to setup page
-  server.sendHeader("Location", String("http://")+WiFi.softAPIP().toString(), true);
-  server.send(302,"text/plain","");
+void handleNotFound(){
+  if(!isSelfHost()){ redirectToSelf(); return; }   // captive portal: bounce home
+  server.send(404, "text/plain", "Not found");
 }
 
 /* ------------------------------- loop bits ------------------------------ */
@@ -321,9 +421,20 @@ void captureIR(){
   if(irrecv.decode(&results)){
     if(recordTarget!=""){
       uint16_t len=getCorrectedRawLength(&results);
-      uint16_t* raw=resultToRawArray(&results);
-      if(raw){ saveIR(recordTarget,raw,len); delete[] raw; }
-      recordTarget="";
+      if(results.overflow){
+        // Truncated frame would replay garbage: report it, keep listening.
+        lastCapBtn=recordTarget; lastCapProto=""; lastCapLen=len; lastCapOvf=true;
+      } else if(len<kMinFrameLen){
+        // Stray repeat code or noise burst, not an AC command: keep listening.
+      } else {
+        uint16_t* raw=resultToRawArray(&results);
+        if(raw){
+          String proto=typeToString(results.decode_type);
+          saveIR(recordTarget,raw,len,proto); delete[] raw;
+          lastCapBtn=recordTarget; lastCapProto=proto; lastCapLen=len; lastCapOvf=false;
+          recordTarget="";
+        }
+      }
     }
     irrecv.resume();
   }
@@ -351,7 +462,36 @@ void checkSchedules(){
     bool today=false; for(JsonVariant v:s["days"].as<JsonArray>()) if((int)v==lt->tm_wday){ today=true; break; }
     if(!today) continue;
     String b=(const char*)(s["action"]|"on");   // "on"/"off"
-    if(LittleFS.exists(irPath(b))){ pendingSend=b; sendAt=millis()+PRE_SEND_DELAY_MS; }
+    if(LittleFS.exists(irPath(b))){ pendingSend=b; sendAt=millis(); }
+  }
+}
+
+void gensetTask(){
+  // Detection always runs so the portal's indicator LED works even when the
+  // automatic action is disabled; only the IR send is gated on the mode.
+  bool armed = (cfg.gsMode=="off" || cfg.gsMode=="eco");
+  int n=WiFi.scanComplete();
+  if(n>=0){                                          // a scan just finished
+    bool found=false;
+    for(int i=0;i<n;i++) if(WiFi.SSID(i)==cfg.gsSsid){ found=true; break; }
+    WiFi.scanDelete();
+    if(found){
+      gsMiss=0;
+      if(!gsPresent){                                // generator just came on
+        gsPresent=true;
+        if(armed && !gsTriggered && LittleFS.exists(irPath(cfg.gsMode))){
+          pendingSend=cfg.gsMode;
+          sendAt=millis()+cfg.gsDelay*1000UL;
+          gsTriggered=true;
+        }
+      }
+    } else if(gsPresent && ++gsMiss>=2){             // gone for 2 scans -> re-arm
+      gsPresent=false; gsTriggered=false; gsMiss=0;
+    }
+  } else if(n!=WIFI_SCAN_RUNNING &&
+            millis()-gsLastScanAt>GS_SCAN_INTERVAL_MS){
+    gsLastScanAt=millis();
+    WiFi.scanNetworks(true, true);                   // async, include hidden
   }
 }
 
@@ -380,17 +520,26 @@ void setup(){
   WiFi.mode(WIFI_AP_STA);
   WiFi.hostname("ERemote");
   WiFi.setOutputPower(WIFI_TX_POWER);   // single radio: applies to AP and STA
-  startAP();
+  startAP();                 // also starts the captive-portal DNS hijack
   connectSTA();
-  dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());   // captive portal
 
   irsend.begin();
+  irrecv.setTolerance(kTolerancePct);
   irrecv.enableIRIn();
 
   applyTime();
 
   // routes
   server.on("/", handleRoot);
+
+  // OS connectivity-check URLs -> redirect so the phone pops the portal.
+  static const char* probes[] = {
+    "/generate_204", "/gen_204",                       // Android
+    "/hotspot-detect.html", "/library/test/success.html", // iOS/macOS
+    "/connecttest.txt", "/ncsi.txt", "/redirect", "/fwlink", // Windows
+    "/success.txt", "/canonical.html"                  // Firefox
+  };
+  for(auto p : probes) server.on(p, redirectToSelf);
   server.on("/api/init",      HTTP_POST,   handleInit);
   server.on("/api/status",    HTTP_GET,    handleStatus);
   server.on("/api/record",    HTTP_POST,   handleRecord);
@@ -398,6 +547,7 @@ void setup(){
   server.on("/api/wifi",      HTTP_POST,   handleWifiSave);
   server.on("/api/wifi",      HTTP_DELETE, handleWifiForget);
   server.on("/api/time",      HTTP_POST,   handleTime);
+  server.on("/api/genset",    HTTP_POST,   handleGenset);
   server.on("/api/schedule",  HTTP_GET,    handleSchedGet);
   server.on("/api/schedule",  HTTP_POST,   handleSchedPost);
   server.on("/api/schedule",  HTTP_DELETE, handleSchedDel);
@@ -410,12 +560,13 @@ void setup(){
 
 /* --------------------------------- loop --------------------------------- */
 void loop(){
-  dnsServer.processNextRequest();
+  if(apOn) dnsServer.processNextRequest();
   server.handleClient();
   captureIR();
   firePending();
   if(!timeValid && time(nullptr)>100000) timeValid=true;
   manageAP();
   checkSchedules();
+  gensetTask();
   clearDRD();
 }
