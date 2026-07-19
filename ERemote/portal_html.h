@@ -59,6 +59,11 @@ padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
 .radio{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px}
 .radio input{width:auto;margin:0}
 .desc{font-size:13px;color:var(--mut);margin:0 0 10px;line-height:1.5}
+.led{width:14px;height:14px;border-radius:50%;background:#4b5563;flex:none;
+display:inline-block;transition:background .3s,box-shadow .3s}
+.led.on{background:#22c55e;box-shadow:0 0 12px rgba(34,197,94,.85);
+animation:ledpulse 1.6s ease-in-out infinite}
+@keyframes ledpulse{50%{box-shadow:0 0 4px rgba(34,197,94,.35)}}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
 background:#1e293b;border:1px solid var(--line);color:var(--txt);padding:11px 18px;
 border-radius:12px;font-size:14px;display:none;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.5)}
@@ -87,7 +92,8 @@ border-radius:12px;font-size:14px;display:none;max-width:90vw;box-shadow:0 8px 2
 </section>
 
 <section>
-  <h2 data-k="genset"></h2>
+  <h2 style="display:flex;align-items:center;gap:9px"><span class="led" id="gled"></span>
+  <span data-k="genset"></span></h2>
   <p class="desc" data-k="gsDesc"></p>
   <div class="kv"><span data-k="status"></span><span id="gdet">-</span></div>
   <div style="margin-top:8px">
@@ -246,10 +252,9 @@ var tt=ST.time||{};
 $('now').textContent=tt.valid?new Date(tt.epoch*1000).toLocaleString(L=='ar'?'ar':'en-GB'):'--:--';
 $('clock').textContent=$('now').textContent;
 var g=ST.genset||{};
-if(g.mode=='off'||g.mode=='eco'){
+$('gled').className='led'+(g.detected?' on':'');
 $('gdet').textContent=g.detected?t('gsDet'):t('gsNo');
-$('gdet').style.color=g.detected?'var(--warn)':'var(--mut)';
-}else{$('gdet').textContent='—';$('gdet').style.color='var(--mut)'}
+$('gdet').style.color=g.detected?'var(--ok)':'var(--mut)';
 var sl=$('slist');sl.innerHTML='';var arr=ST.schedules||[];
 if(!arr.length){sl.innerHTML='<div class="empty">'+t('none')+'</div>';return}
 arr.forEach(function(s){var d=document.createElement('div');d.className='sched';

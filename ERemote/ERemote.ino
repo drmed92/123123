@@ -10,6 +10,8 @@
      - Normal boot -> serves the full control portal (portal_html.h, in flash).
      - Always AP+STA: open AP "ERemote" for the phone; STA joins the router
        (entered in the portal) for NTP time + internet.
+     - Portal address on the AP: http://4.4.4.4  (chosen because it's short
+       and easy to tell customers to type when the captive popup doesn't show).
      - Records raw IR frames from the AC remote (reliable for AC protocols)
        and replays them on schedule or on demand.
 
@@ -237,7 +239,9 @@ void writeSched(JsonDocument& d){
 void startAP(){
   // Explicit AP addressing: guarantees the DHCP server advertises us as
   // gateway AND DNS server, which the captive-portal hijack depends on.
-  IPAddress apIP(192,168,4,1);
+  // 4.4.4.4 on purpose: short enough to tell customers to type into their
+  // browser when the automatic captive popup doesn't appear.
+  IPAddress apIP(4,4,4,4);
   WiFi.softAPConfig(apIP, apIP, IPAddress(255,255,255,0));
   WiFi.softAP(AP_SSID, nullptr, AP_CHANNEL);   // open network
   dnsServer.setTTL(0);                          // don't let phones cache answers
@@ -465,9 +469,9 @@ void checkSchedules(){
 }
 
 void gensetTask(){
-  if(cfg.gsMode!="off" && cfg.gsMode!="eco"){        // feature disabled
-    gsPresent=false; gsTriggered=false; return;
-  }
+  // Detection always runs so the portal's indicator LED works even when the
+  // automatic action is disabled; only the IR send is gated on the mode.
+  bool armed = (cfg.gsMode=="off" || cfg.gsMode=="eco");
   int n=WiFi.scanComplete();
   if(n>=0){                                          // a scan just finished
     bool found=false;
@@ -477,7 +481,7 @@ void gensetTask(){
       gsMiss=0;
       if(!gsPresent){                                // generator just came on
         gsPresent=true;
-        if(!gsTriggered && LittleFS.exists(irPath(cfg.gsMode))){
+        if(armed && !gsTriggered && LittleFS.exists(irPath(cfg.gsMode))){
           pendingSend=cfg.gsMode;
           sendAt=millis()+cfg.gsDelay*1000UL;
           gsTriggered=true;
