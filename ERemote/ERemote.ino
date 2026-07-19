@@ -39,28 +39,43 @@ const char SETUP_HTML[] PROGMEM = R"SETUP(
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ERemote setup</title><style>
 :root{--b:#0f766e;--b2:#0ea5a4}*{box-sizing:border-box}
-body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Tahoma,sans-serif;
 background:#0b1220;color:#e6edf5;display:grid;place-items:center;min-height:100vh;padding:24px}
 .card{max-width:380px;width:100%;background:#131c2b;border:1px solid #243244;border-radius:20px;
-padding:28px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+padding:28px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.4);position:relative}
 .logo{width:56px;height:56px;border-radius:16px;margin:0 auto 14px;
 background:linear-gradient(135deg,var(--b),var(--b2));display:grid;place-items:center}
 .logo svg{width:30px;height:30px;color:#fff}
-h1{font-size:20px;margin:0 0 6px}p{color:#93a1b5;font-size:14px;line-height:1.5;margin:0 0 22px}
-button{width:100%;border:0;border-radius:14px;padding:14px;font-size:15px;font-weight:700;
+h1{font-size:20px;margin:0 0 6px}p{color:#93a1b5;font-size:14px;line-height:1.6;margin:0 0 22px}
+button{border:0;border-radius:14px;padding:14px;font-size:15px;font-weight:700;
 color:#fff;background:var(--b);cursor:pointer;font-family:inherit}
+#go{width:100%}
 button:disabled{opacity:.6}.ok{color:#86efac;font-weight:600;margin-top:14px;display:none}
+.lang{position:absolute;top:14px;inset-inline-end:14px;padding:6px 14px;font-size:13px;
+font-weight:600;background:#243244;border-radius:10px}
 </style></head><body><div class="card">
+<button class="lang" id="lang" onclick="setLang(L=='en'?'ar':'en')">عربي</button>
 <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
 stroke-linecap="round"><path d="M4 6h16v9H4z"/><path d="M8 19h8M12 15v4"/><circle cx="8" cy="10.5" r="1"/>
 <path d="M12 9v3M16 9v3"/></svg></div>
-<h1>Welcome to ERemote</h1>
-<p>Let's set up your smart AC remote. This creates the device's storage so your
-codes, Wi-Fi and schedules survive power loss.</p>
-<button id="go" onclick="init()">Initialize device</button>
-<div class="ok" id="ok">Ready! Loading portal…</div>
+<h1 id="t1"></h1>
+<p id="t2"></p>
+<button id="go" onclick="init()"></button>
+<div class="ok" id="ok"></div>
 </div><script>
-async function init(){var b=document.getElementById('go');b.disabled=true;b.textContent='Setting up…';
+var D={en:{t1:'Welcome to ERemote',
+t2:"Let's set up your smart AC remote. This creates the device's storage so your codes, Wi-Fi and schedules survive power loss.",
+go:'Initialize device',busy:'Setting up…',ok:'Ready! Loading portal…',lang:'عربي'},
+ar:{t1:'أهلاً بك في ERemote',
+t2:'لنقم بإعداد جهاز التحكم الذكي بالمكيف. هذه الخطوة تُنشئ ذاكرة الجهاز حتى تبقى الأكواد وشبكة الواي فاي والجداول محفوظة بعد انقطاع الكهرباء.',
+go:'تهيئة الجهاز',busy:'جارٍ الإعداد…',ok:'تم! جارٍ فتح لوحة التحكم…',lang:'EN'}};
+var L='en';
+function setLang(l){L=l;try{localStorage.setItem('erl',l)}catch(e){}
+document.documentElement.lang=l;document.documentElement.dir=(l=='ar')?'rtl':'ltr';
+var d=D[l];t1.textContent=d.t1;t2.textContent=d.t2;go.textContent=d.go;
+ok.textContent=d.ok;lang.textContent=d.lang;}
+var s='en';try{s=localStorage.getItem('erl')||'en'}catch(e){}setLang(s);
+async function init(){var b=document.getElementById('go');b.disabled=true;b.textContent=D[L].busy;
 try{await fetch('/api/init',{method:'POST'});}catch(e){}
 document.getElementById('ok').style.display='block';setTimeout(function(){location.href='/';},900);}
 </script></body></html>
@@ -184,7 +199,13 @@ void writeSched(JsonDocument& d){
 
 /* ------------------------------- WiFi ----------------------------------- */
 void startAP(){
+  // Explicit AP addressing: guarantees the DHCP server advertises us as
+  // gateway AND DNS server, which the captive-portal hijack depends on.
+  IPAddress apIP(192,168,4,1);
+  WiFi.softAPConfig(apIP, apIP, IPAddress(255,255,255,0));
   WiFi.softAP(AP_SSID, nullptr, AP_CHANNEL);   // open network
+  dnsServer.setTTL(0);                          // don't let phones cache answers
+  dnsServer.start(DNS_PORT, "*", apIP);         // every hostname -> us
   apOn=true;
 }
 void connectSTA(){
@@ -194,11 +215,30 @@ void manageAP(){
   if(!MANAGE_AP) return;
   if(WiFi.status()==WL_CONNECTED){
     if(staConnectedAt==0) staConnectedAt=millis();
-    if(apOn && millis()-staConnectedAt>AP_HOLD_AFTER_STA){ WiFi.softAPdisconnect(true); apOn=false; }
+    if(apOn && millis()-staConnectedAt>AP_HOLD_AFTER_STA){ dnsServer.stop(); WiFi.softAPdisconnect(true); apOn=false; }
   } else {
     staConnectedAt=0;
     if(!apOn){ startAP(); }   // router lost -> bring AP back so the portal stays reachable
   }
+}
+
+/* ------------------------- captive portal probes -------------------------
+   Phones decide whether to pop the "sign in to network" page by fetching a
+   known URL and checking the answer (Android expects HTTP 204, Apple expects
+   the word "Success", Windows expects "Microsoft NCSI"). Our DNS hijack sends
+   those requests here; answering with a redirect to our own IP (and closing
+   the socket, which some Android builds require) triggers the portal popup. */
+void redirectToSelf(){
+  // Redirect to the IP of whichever interface (AP or STA) the client used.
+  IPAddress ip = server.client().localIP();
+  server.sendHeader("Location", String("http://") + ip.toString() + "/", true);
+  server.send(302, "text/html", "");
+  server.client().stop();
+}
+bool isSelfHost(){
+  String h = server.hostHeader();
+  int c = h.indexOf(':'); if(c >= 0) h = h.substring(0, c);   // strip :port
+  return h == server.client().localIP().toString() || h == "eremote" || h == "eremote.local";
 }
 
 /* ============================ HTTP handlers ============================== */
@@ -311,9 +351,9 @@ void handleReset(){
   delay(150); LittleFS.format(); ESP.restart();
 }
 
-void handleNotFound(){                    // captive portal: bounce to setup page
-  server.sendHeader("Location", String("http://")+WiFi.softAPIP().toString(), true);
-  server.send(302,"text/plain","");
+void handleNotFound(){
+  if(!isSelfHost()){ redirectToSelf(); return; }   // captive portal: bounce home
+  server.send(404, "text/plain", "Not found");
 }
 
 /* ------------------------------- loop bits ------------------------------ */
@@ -380,9 +420,8 @@ void setup(){
   WiFi.mode(WIFI_AP_STA);
   WiFi.hostname("ERemote");
   WiFi.setOutputPower(WIFI_TX_POWER);   // single radio: applies to AP and STA
-  startAP();
+  startAP();                 // also starts the captive-portal DNS hijack
   connectSTA();
-  dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());   // captive portal
 
   irsend.begin();
   irrecv.enableIRIn();
@@ -391,6 +430,15 @@ void setup(){
 
   // routes
   server.on("/", handleRoot);
+
+  // OS connectivity-check URLs -> redirect so the phone pops the portal.
+  static const char* probes[] = {
+    "/generate_204", "/gen_204",                       // Android
+    "/hotspot-detect.html", "/library/test/success.html", // iOS/macOS
+    "/connecttest.txt", "/ncsi.txt", "/redirect", "/fwlink", // Windows
+    "/success.txt", "/canonical.html"                  // Firefox
+  };
+  for(auto p : probes) server.on(p, redirectToSelf);
   server.on("/api/init",      HTTP_POST,   handleInit);
   server.on("/api/status",    HTTP_GET,    handleStatus);
   server.on("/api/record",    HTTP_POST,   handleRecord);
@@ -410,7 +458,7 @@ void setup(){
 
 /* --------------------------------- loop --------------------------------- */
 void loop(){
-  dnsServer.processNextRequest();
+  if(apOn) dnsServer.processNextRequest();
   server.handleClient();
   captureIR();
   firePending();
