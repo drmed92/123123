@@ -104,9 +104,10 @@ const uint8_t  kTimeout           = 50;     // ms of silence = end of frame;
 const uint8_t  kTolerancePct      = 35;     // %; default 25. Looser matching so
                                             // off-spec remotes (Tossot/clones)
                                             // still get their protocol named
-const uint16_t kMinFrameLen       = 40;     // reject shorter bursts while
-                                            // recording: repeat codes / noise,
-                                            // never a real AC command
+const uint16_t kMinFrameLen       = 12;     // ignore bursts shorter than this
+                                            // (repeat codes / stray noise);
+                                            // any longer frame is recorded raw
+                                            // and stops the window immediately
 IRrecv irrecv(IR_RX_PIN, kCaptureBufferSize, kTimeout, true);
 IRsend irsend(IR_TX_PIN);
 decode_results results;
@@ -182,6 +183,7 @@ uint32_t lastClaimAt   = 0;
 int      lastClaimRc   = 0;      // 0=never tried; >0 HTTP status; <0 connection error
 uint8_t  claimTries    = 0;      // first 3 attempts retry every 10 s, then 60 s
 bool     prevWifiConn  = false;
+bool     claimSynced   = false;  // did one claim this boot to re-sync with server
 uint32_t lastMqttTry   = 0;
 uint32_t lastStatePub  = 0;
 bool     statePubQueued= false;  // something changed -> publish state soon
@@ -389,9 +391,7 @@ void handleStatus(){
 
   d["remote"]["claimed"]=(bool)ident.claimed;
   d["remote"]["code"]=ident.code;
-  // Always build the link from ER_HOST (the DNS name) + code, so it never
-  // shows a stale server-supplied IP that got cached at claim time.
-  d["remote"]["link"]=ident.code[0] ? (String("https://")+ER_HOST+"/r/"+ident.code) : String("");
+  d["remote"]["link"]=ident.link;            // link as issued by the server
   d["remote"]["mqtt"]=mqtt.connected();
   d["remote"]["lastRc"]=lastClaimRc;
 
@@ -506,18 +506,19 @@ void captureIR(){
   if(irrecv.decode(&results)){
     if(recordTarget!=""){
       uint16_t len=getCorrectedRawLength(&results);
-      if(results.overflow){
-        // Truncated frame would replay garbage: report it, keep listening.
-        lastCapBtn=recordTarget; lastCapProto=""; lastCapLen=len; lastCapOvf=true;
-      } else if(len<kMinFrameLen){
-        // Stray repeat code or noise burst, not an AC command: keep listening.
-      } else {
+      // Save ANY real IR burst and stop immediately — the protocol does not
+      // matter (raw replay works regardless), and even a buffer-overflow
+      // capture is kept best-effort so recording never hangs waiting. Only a
+      // tiny burst (< kMinFrameLen, e.g. a repeat code or stray noise) is
+      // ignored so it isn't mistaken for the actual button.
+      if(len>=kMinFrameLen){
         uint16_t* raw=resultToRawArray(&results);
         if(raw){
-          String proto=typeToString(results.decode_type);
+          String proto=typeToString(results.decode_type);   // "UNKNOWN" is fine
           saveIR(recordTarget,raw,len,proto); delete[] raw;
-          lastCapBtn=recordTarget; lastCapProto=proto; lastCapLen=len; lastCapOvf=false;
-          recordTarget="";
+          lastCapBtn=recordTarget; lastCapProto=proto;
+          lastCapLen=len; lastCapOvf=results.overflow;
+          recordTarget="";                     // stop the record window now
           statePubQueued=true;                 // tell the server a code changed
         }
       }
@@ -643,9 +644,13 @@ void scanTask(){
    different secret, so the link can't be hijacked. */
 void claimTask(){
   bool conn = WiFi.status()==WL_CONNECTED;
-  if(conn && !prevWifiConn){ lastClaimAt=0; claimTries=0; }  // claim right away
+  if(conn && !prevWifiConn && !claimSynced){ lastClaimAt=0; claimTries=0; } // claim right away
   prevWifiConn=conn;
-  if(ident.claimed || !conn) return;
+  if(!conn || claimSynced) return;
+  // Claim once per boot even if already claimed: it's idempotent for a known
+  // device (server returns the same code), and it re-registers automatically
+  // if the server lost its record (e.g. a fresh data.json after redeploy),
+  // so the device can never display a code the server no longer knows.
   // Quick retries first (server hiccup, DNS warm-up), then back off.
   uint32_t interval = (claimTries<3) ? 10000 : CLAIM_RETRY_MS;
   if(lastClaimAt && millis()-lastClaimAt<interval) return;
@@ -666,7 +671,7 @@ void claimTask(){
       strlcpy(ident.code, (const char*)(r["code"]|""),         sizeof(ident.code));
       strlcpy(ident.link, (const char*)(r["link"]|""),         sizeof(ident.link));
       strlcpy(ident.host, (const char*)(r["mqtt"]["host"]|ER_HOST), sizeof(ident.host));
-      if(ident.code[0]){ ident.claimed=1; saveIdentity(); }
+      if(ident.code[0]){ ident.claimed=1; claimSynced=true; saveIdentity(); }
     }
   }
   http.end();
