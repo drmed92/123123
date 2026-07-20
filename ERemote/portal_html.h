@@ -338,11 +338,13 @@ async function doSend(b){if(ST&&ST.codes&&ST.codes[b]&&!ST.codes[b].set){toast(t
 try{var r=await fetch('/api/send?btn='+b,{method:'POST'});
 toast(r.ok?t('queued'):t('noCode'))}catch(e){toast(t('err'))}}
 
+var recIv=null;
 async function doRec(b){var m=$('recmsg');
+if(recIv){clearInterval(recIv);recIv=null}   // drop any previous button's window
 var was=!!(ST&&ST.codes&&ST.codes[b]&&ST.codes[b].set);
 try{await fetch('/api/record?btn='+b,{method:'POST'})}catch(e){toast(t('err'));return}
 m.textContent=t('recording')+' (30)';m.style.display='block';
-var n=0,iv=setInterval(async function(){n++;
+var n=0,iv=recIv=setInterval(async function(){n++;
 m.textContent=t('recording')+' ('+Math.max(0,30-n)+')';
 await refresh();
 var now=!!(ST&&ST.codes&&ST.codes[b]&&ST.codes[b].set);

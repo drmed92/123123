@@ -208,6 +208,7 @@ function showRecord(b){dots(STEPS.indexOf(b));
 if(codeSet(b)){renderRecDone(b,true);return}
 startRec(b)}
 function startRec(b){
+clearTimers();                    // drop any prior record window still polling
 h(recHdr(b)+'<p>'+t('recHow').replace('{B}',t('bn_'+b))+'</p>'+
 '<div class="pulse">⚫</div><div class="count" id="cnt">30</div>'+
 '<div class="st" id="rst">'+t('listening')+'</div>'+
