@@ -156,10 +156,15 @@ app.post('/api/claim', (req, res) => {
     saveDb();
     console.log(`[claim] NEW ${id} -> code ${dev.code}`);
   }
+  // Always hand back an https link on the public domain. Prefer the Host the
+  // device actually reached us on (er.my.to via Caddy); fall back to BASE_URL.
+  // This avoids ever returning a raw http://IP link.
+  const host = String(req.headers.host || '').split(':')[0];
+  const base = host ? `https://${host}` : BASE_URL.replace(/^http:/, 'https:');
   res.json({
     ok: true,
     code: dev.code,
-    link: `${BASE_URL}/r/${dev.code}`,
+    link: `${base}/r/${dev.code}`,
     mqtt: { host: MQTT_HOST, port: MQTT_PORT },
   });
 });

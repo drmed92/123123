@@ -117,6 +117,7 @@ en:{
  done:'recorded',skipped:'skipped',connected:'connected',enabled:'enabled',disabled:'off',
  dNote:'Your personal internet control link will appear on the main page once the device connects to the server.',
  dLink:'Your internet control link — save it and open it from anywhere:',
+ dWarn:'⚠ Save this link NOW! Bookmark it or write it down. The ERemote Wi-Fi will close in 5 minutes to rest the device — after that you control the AC only through this link.',
  copy:'Copy',copied:'Link copied.',
  open:'Open control panel',
  delayS:['3 seconds','5 seconds','10 seconds','15 seconds','30 seconds','1 minute','2 minutes','5 minutes']},
@@ -158,6 +159,7 @@ ar:{
  done:'مسجَّل',skipped:'تم تخطيه',connected:'متصل',enabled:'مفعَّل',disabled:'معطَّل',
  dNote:'رابط التحكم عبر الإنترنت الخاص بك سيظهر في الصفحة الرئيسية بعد اتصال الجهاز بالخادم.',
  dLink:'رابط التحكم عبر الإنترنت الخاص بك — احفظه وافتحه من أي مكان:',
+ dWarn:'⚠ احفظ هذا الرابط الآن! أضِفه للمفضلة أو اكتبه. ستُغلق شبكة ERemote خلال ٥ دقائق لإراحة الجهاز — بعدها يمكنك التحكم بالمكيف عبر هذا الرابط فقط.',
  copy:'نسخ',copied:'تم نسخ الرابط.',
  open:'فتح لوحة التحكم',
  delayS:['٣ ثوانٍ','٥ ثوانٍ','١٠ ثوانٍ','١٥ ثانية','٣٠ ثانية','دقيقة واحدة','دقيقتان','٥ دقائق']}};
@@ -340,7 +342,10 @@ var r=(ST&&ST.remote)||{};
 var linkPart=(r.claimed&&r.link)
 ?'<p style="margin-bottom:6px">'+t('dLink')+'</p>'+
  '<div class="linkrow"><input id="wlink" readonly value="'+r.link+'">'+
- '<button onclick="copyWLink()">'+t('copy')+'</button></div>'
+ '<button onclick="copyWLink()">'+t('copy')+'</button></div>'+
+ '<p style="color:var(--bad);font-weight:800;font-size:15.5px;line-height:1.7;'+
+ 'background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.4);'+
+ 'border-radius:12px;padding:12px;margin:4px 0 6px">'+t('dWarn')+'</p>'
 :'<p>'+t('dNote')+'</p>';
 h('<h1>'+t('dTitle')+'</h1><div class="okmark">✓</div><p class="sum" style="text-align:center">'+
 row(t('dOn'),codeSet('on'),t('done'),t('skipped'))+

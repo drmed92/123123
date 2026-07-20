@@ -70,11 +70,14 @@ const float  WIFI_TX_POWER = 17.0;
 
 const uint32_t BOOT_GRACE_MS     = 8000;   // no *scheduled* send this soon after boot
 
-// AP lifecycle: MANAGE_AP=false keeps the hotspot (and http://4.4.4.4) up
-// forever, which is what customers are told to use. Set true to drop the AP
-// AP_HOLD_AFTER_STA ms after the router link comes up.
-const uint32_t AP_HOLD_AFTER_STA = 180000UL;   // 3 min (only if MANAGE_AP)
-const bool     MANAGE_AP         = false;
+// AP lifecycle. The hotspot (http://4.4.4.4) stays up during setup and for
+// AP_GRACE_AFTER_LINK after the personal link is first shown (so the customer
+// can read and bookmark it), then shuts off to spare the device. If the
+// server becomes unreachable for SERVER_UNREACH_TO_AP, the AP returns and the
+// device keeps retrying the router every STA_RETRY_MS.
+const uint32_t AP_GRACE_AFTER_LINK  = 300000UL;   // 5 min after link shown
+const uint32_t SERVER_UNREACH_TO_AP = 120000UL;   // 2 min offline -> AP back
+const uint32_t STA_RETRY_MS         = 60000UL;    // re-attempt router every 60 s
 
 const uint16_t RECORD_TIMEOUT_MS = 30000;  // matches the wizard's visible countdown
 
@@ -147,6 +150,8 @@ bool     apOn          = true;
 uint32_t bootMillis    = 0;
 uint32_t staConnectedAt= 0;
 uint32_t staBeginAt    = 0;      // last WiFi.begin(); scans pause while associating
+uint32_t linkShownAt   = 0;      // first moment the device was online (link shown)
+uint32_t lastServerOk  = 0;      // last time MQTT was connected (server reachable)
 int      lastSchedKey  = -1;
 
 String   recordTarget  = "";     // "on"/"off"/"eco" while capturing
@@ -288,15 +293,25 @@ void connectSTA(){
     staConnectedAt=0; staBeginAt=millis();
   }
 }
+void stopAP(){
+  if(apOn){ dnsServer.stop(); WiFi.softAPdisconnect(true); apOn=false; }
+}
 void manageAP(){
-  if(!MANAGE_AP) return;
-  if(WiFi.status()==WL_CONNECTED){
-    if(staConnectedAt==0) staConnectedAt=millis();
-    if(apOn && millis()-staConnectedAt>AP_HOLD_AFTER_STA){ dnsServer.stop(); WiFi.softAPdisconnect(true); apOn=false; }
-  } else {
-    staConnectedAt=0;
-    if(!apOn){ startAP(); }   // router lost -> bring AP back so the portal stays reachable
-  }
+  bool reachable = mqtt.connected();
+  if(reachable){ lastServerOk=millis(); if(linkShownAt==0) linkShownAt=millis(); }
+
+  // Not set up yet: always keep the AP so the customer can run the wizard.
+  if(!ident.claimed){ if(!apOn) startAP(); return; }
+
+  bool grace = linkShownAt && millis()-linkShownAt < AP_GRACE_AFTER_LINK;
+  bool unreachable = (lastServerOk==0) || (millis()-lastServerOk > SERVER_UNREACH_TO_AP);
+
+  if(grace || unreachable){ if(!apOn) startAP(); }   // reading window, or offline
+  else stopAP();                                     // online & past grace -> save power
+
+  // While we can't reach the server, keep trying to (re)join the router.
+  if(unreachable && cfg.ssid.length() && WiFi.status()!=WL_CONNECTED &&
+     millis()-staBeginAt>STA_RETRY_MS) connectSTA();
 }
 
 /* ------------------------- captive portal probes -------------------------
