@@ -1,14 +1,17 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ERemote — جهاز التحكم الذكي بالمكيفات</title><style>
+<title>ERemote</title><style>
 :root{--b:#0f766e;--b2:#0ea5a4;--bg:#0b1220;--card:#131c2b;--line:#243244;
 --txt:#f2f6fb;--mut:#b3c0d4;--ok:#86efac;--bad:#fca5a5}
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Tahoma,sans-serif;
 font-size:17px;background:var(--bg);color:var(--txt);min-height:100vh}
-.wrap{max-width:520px;margin:0 auto;padding:16px 16px 48px}
+.wrap{max-width:520px;margin:0 auto;padding:0 16px 48px}
 .banner{background:linear-gradient(135deg,var(--b),var(--b2));border-radius:0 0 22px 22px;
-padding:34px 20px 30px;text-align:center;color:#fff}
+padding:34px 20px 30px;text-align:center;color:#fff;position:relative}
+.lang{position:absolute;top:16px;inset-inline-end:16px;padding:7px 14px;font-size:14px;
+font-weight:700;background:rgba(255,255,255,.18);border:0;border-radius:10px;color:#fff;
+cursor:pointer;font-family:inherit}
 .banner .logo{width:64px;height:64px;border-radius:18px;margin:0 auto 12px;
 background:rgba(255,255,255,.15);display:grid;place-items:center}
 .banner .logo svg{width:36px;height:36px}
@@ -26,8 +29,7 @@ button{border:0;border-radius:12px;padding:14px 22px;font-size:17px;font-weight:
 color:#fff;background:var(--b);cursor:pointer;font-family:inherit;flex:none}
 button:disabled{opacity:.6}
 .err{color:var(--bad);font-size:15px;margin:10px 0 0;min-height:1.3em}
-.feat{display:flex;gap:14px;align-items:flex-start;padding:12px 0;
-border-bottom:1px solid var(--line)}
+.feat{display:flex;gap:14px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line)}
 .feat:last-child{border-bottom:0}
 .feat .ic{font-size:26px;flex:none;width:38px;text-align:center}
 .feat b{display:block;font-size:16.5px;margin-bottom:3px}
@@ -36,66 +38,78 @@ footer{text-align:center;color:var(--mut);font-size:13.5px;margin-top:22px}
 </style></head><body>
 
 <div class="banner">
+  <button class="lang" id="lang" onclick="setLang(L=='en'?'ar':'en')">EN</button>
   <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
   stroke-linecap="round"><path d="M4 6h16v9H4z"/><path d="M8 19h8M12 15v4"/>
   <circle cx="8" cy="10.5" r="1"/><path d="M12 9v3M16 9v3"/></svg></div>
-  <h1>خادم ERemote</h1>
-  <p>جهاز التحكم الذكي القابل للبرمجة بالمكيفات</p>
+  <h1 data-k="title"></h1>
+  <p data-k="sub"></p>
 </div>
 
 <div class="wrap">
-
 <section>
-  <h2>الدخول إلى جهازك</h2>
-  <label>أدخل رمز جهازك المكوَّن من ٦ رموز</label>
+  <h2 data-k="loginT"></h2>
+  <label data-k="loginL"></label>
   <form class="row" onsubmit="return go(event)">
     <input id="code" maxlength="6" autocomplete="off" placeholder="AB2CD3">
-    <button id="btn" type="submit">دخول</button>
+    <button id="btn" type="submit" data-k="enter"></button>
   </form>
   <div class="err" id="err"></div>
 </section>
 
 <section>
-  <h2>ماذا يفعل ERemote؟</h2>
-  <div class="feat"><div class="ic">🌐</div><div>
-    <b>تحكم من أي مكان</b>
-    <span>شغّل أو أطفئ مكيفك عبر الإنترنت من العمل أو السيارة — برابطك الخاص، بدون تطبيقات.</span>
-  </div></div>
-  <div class="feat"><div class="ic">⚡</div><div>
-    <b>كشف المولّدة تلقائياً</b>
-    <span>عند تشغيل مولّدة الحي، يحوِّل الجهاز مكيفك تلقائياً إلى الوضع الاقتصادي أو يطفئه — يحمي المولّدة ويوفّر الأمبيرات.</span>
-  </div></div>
-  <div class="feat"><div class="ic">⏰</div><div>
-    <b>جدولة أسبوعية</b>
-    <span>برمج أوقات التشغيل والإطفاء لكل يوم من أيام الأسبوع — يبرد البيت قبل وصولك وينطفئ وحده.</span>
-  </div></div>
-  <div class="feat"><div class="ic">📡</div><div>
-    <b>يعمل مع جميع المكيفات</b>
-    <span>يتعلّم أزرار ريموتك الأصلي مباشرة (Gree، Midea، Tossot وغيرها) — بدون أكواد معقدة.</span>
-  </div></div>
-  <div class="feat"><div class="ic">🛠️</div><div>
-    <b>إعداد سهل خطوة بخطوة</b>
-    <span>معالج إعداد بالعربية يرشدك: سجّل الأزرار، اربط الواي فاي، وانتهيت خلال دقيقتين.</span>
-  </div></div>
-  <div class="feat"><div class="ic">💰</div><div>
-    <b>توفير الطاقة والجهد</b>
-    <span>لا مزيد من مكيف يعمل طوال اليوم بلا داعٍ — راحة أكثر، فاتورة أقل، وعمر أطول لمكيفك.</span>
-  </div></div>
+  <h2 data-k="whatT"></h2>
+  <div class="feat"><div class="ic">🌐</div><div><b data-k="f1t"></b><span data-k="f1d"></span></div></div>
+  <div class="feat"><div class="ic">⚡</div><div><b data-k="f2t"></b><span data-k="f2d"></span></div></div>
+  <div class="feat"><div class="ic">⏰</div><div><b data-k="f3t"></b><span data-k="f3d"></span></div></div>
+  <div class="feat"><div class="ic">📡</div><div><b data-k="f4t"></b><span data-k="f4d"></span></div></div>
+  <div class="feat"><div class="ic">🛠️</div><div><b data-k="f5t"></b><span data-k="f5d"></span></div></div>
+  <div class="feat"><div class="ic">💰</div><div><b data-k="f6t"></b><span data-k="f6d"></span></div></div>
 </section>
-
 <footer>ERemote © 2026</footer>
 </div>
 
 <script>
-async function go(e){e.preventDefault();
+var D={
+ar:{title:'خادم ERemote',sub:'جهاز التحكم الذكي القابل للبرمجة بالمكيفات',
+loginT:'الدخول إلى جهازك',loginL:'أدخل رمز جهازك المكوَّن من ٦ رموز',enter:'دخول',lang:'EN',
+short:'الرمز مكوَّن من ٦ رموز.',rate:'محاولات كثيرة — انتظر دقيقة ثم حاول.',
+notfound:'٤٠٤ — الرمز غير صحيح.',neterr:'تعذّر الاتصال بالخادم.',
+whatT:'ماذا يفعل ERemote؟',
+f1t:'تحكم من أي مكان',f1d:'شغّل أو أطفئ مكيفك عبر الإنترنت من العمل أو السيارة — برابطك الخاص، بدون تطبيقات.',
+f2t:'كشف المولّدة تلقائياً',f2d:'عند تشغيل مولّدة الحي، يحوِّل مكيفك تلقائياً إلى الوضع الاقتصادي أو يطفئه — يحمي المولّدة ويوفّر الأمبيرات.',
+f3t:'جدولة أسبوعية',f3d:'برمج أوقات التشغيل والإطفاء لكل يوم — يبرد البيت قبل وصولك وينطفئ وحده.',
+f4t:'يعمل مع جميع المكيفات',f4d:'يتعلّم أزرار ريموتك الأصلي مباشرة (Gree، Midea، Tossot وغيرها) — بدون أكواد معقدة.',
+f5t:'إعداد سهل خطوة بخطوة',f5d:'معالج إعداد بالعربية يرشدك: سجّل الأزرار، اربط الواي فاي، وانتهيت خلال دقيقتين.',
+f6t:'توفير الطاقة والجهد',f6d:'لا مزيد من مكيف يعمل طوال اليوم بلا داعٍ — راحة أكثر، فاتورة أقل، وعمر أطول لمكيفك.'},
+en:{title:'ERemote Server',sub:'The smart programmable IR remote for air conditioners',
+loginT:'Access your device',loginL:'Enter your 6-character device code',enter:'Enter',lang:'عربي',
+short:'The code is 6 characters.',rate:'Too many tries — wait a minute and retry.',
+notfound:'404 — code not found.',neterr:'Could not reach the server.',
+whatT:'What does ERemote do?',
+f1t:'Control from anywhere',f1d:'Turn your AC on or off over the internet from work or the car — with your personal link, no apps.',
+f2t:'Automatic generator detection',f2d:'When the neighborhood generator starts, it switches your AC to ECO or turns it off automatically — protects the generator and saves amps.',
+f3t:'Weekly scheduling',f3d:'Program on/off times for each day — the house cools before you arrive and shuts off by itself.',
+f4t:'Works with every AC',f4d:'Learns your original remote’s buttons directly (Gree, Midea, Tossot and others) — no complex codes.',
+f5t:'Easy step-by-step setup',f5d:'A guided wizard walks you through: record the buttons, connect Wi-Fi, done in two minutes.',
+f6t:'Saves energy and effort',f6d:'No more AC running all day for nothing — more comfort, a lower bill, and longer AC life.'}};
+var L='ar';
+function t(k){return D[L][k]}
+function setLang(l){L=l;try{localStorage.setItem('erl',l)}catch(e){}
+document.documentElement.lang=l;document.documentElement.dir=(l=='ar')?'rtl':'ltr';
+var e=document.querySelectorAll('[data-k]');
+for(var i=0;i<e.length;i++)e[i].textContent=t(e[i].getAttribute('data-k'));
+document.getElementById('lang').textContent=t('lang')}
+var s='ar';try{s=localStorage.getItem('erl')||'ar'}catch(e){}setLang(s);
+
+async function go(ev){ev.preventDefault();
 var c=document.getElementById('code').value.trim().toUpperCase();
-var err=document.getElementById('err'),btn=document.getElementById('btn');
-err.textContent='';
-if(c.length!==6){err.textContent='الرمز مكوَّن من ٦ رموز.';return false}
+var err=document.getElementById('err'),btn=document.getElementById('btn');err.textContent='';
+if(c.length!==6){err.textContent=t('short');return false}
 btn.disabled=true;
 try{var r=await fetch('/api/r/'+encodeURIComponent(c)+'/state');
 if(r.ok){location.href='/r/'+c;return false}
-err.textContent=r.status===429?'محاولات كثيرة — انتظر دقيقة ثم حاول.':'404 — الرمز غير صحيح.';
-}catch(x){err.textContent='تعذّر الاتصال بالخادم.'}
+err.textContent=r.status===429?t('rate'):t('notfound');
+}catch(x){err.textContent=t('neterr')}
 btn.disabled=false;return false}
 </script></body></html>

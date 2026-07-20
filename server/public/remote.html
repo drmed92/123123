@@ -2,38 +2,57 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ERemote</title><style>
 :root{--b:#0f766e;--b2:#0ea5a4;--bg:#0b1220;--card:#131c2b;--line:#243244;
---txt:#f2f6fb;--mut:#b3c0d4;--ok:#86efac;--bad:#fca5a5}
+--txt:#f2f6fb;--mut:#b3c0d4;--ok:#86efac;--bad:#fca5a5;--warn:#fcd34d}
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Tahoma,sans-serif;
-font-size:17px;background:var(--bg);color:var(--txt);min-height:100vh;padding:16px;
-display:flex;justify-content:center;align-items:flex-start}
-.wrap{max-width:420px;width:100%}
-header{display:flex;align-items:center;gap:12px;margin:8px 0 16px}
+font-size:17px;background:var(--bg);color:var(--txt);min-height:100vh;padding:16px 16px 40px}
+.wrap{max-width:440px;margin:0 auto}
+header{display:flex;align-items:center;gap:12px;margin:6px 0 16px}
 .logo{width:40px;height:40px;border-radius:12px;flex:none;
 background:linear-gradient(135deg,var(--b),var(--b2));display:grid;place-items:center}
 .logo svg{width:22px;height:22px;color:#fff}
-header h1{font-size:18px;margin:0;flex:1}
+header h1{font-size:19px;margin:0;flex:1}
 .lang{padding:7px 15px;font-size:14px;font-weight:600;background:var(--line);
 border:0;border-radius:10px;color:var(--txt);cursor:pointer;font-family:inherit}
 section{background:var(--card);border:1px solid var(--line);border-radius:16px;
 padding:16px;margin-bottom:14px}
-.kv{display:flex;justify-content:space-between;align-items:center;font-size:16.5px;padding:8px 0}
+h2{font-size:15px;margin:0 0 12px;color:var(--mut);font-weight:600;
+text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:9px}
+.kv{display:flex;justify-content:space-between;align-items:center;font-size:16px;padding:5px 0}
 .kv span:first-child{color:var(--mut)}
 .led{width:14px;height:14px;border-radius:50%;background:#4b5563;flex:none;
 display:inline-block;transition:background .3s,box-shadow .3s;vertical-align:middle}
 .led.on{background:#22c55e;box-shadow:0 0 12px rgba(34,197,94,.85);
 animation:lp 1.6s ease-in-out infinite}
 @keyframes lp{50%{box-shadow:0 0 4px rgba(34,197,94,.35)}}
-.grid{display:grid;gap:12px;margin-top:8px}
+.grid{display:grid;gap:12px}
 button.cmd{border:0;border-radius:14px;padding:20px 0;font-size:19px;font-weight:700;
 color:#fff;background:var(--b);cursor:pointer;font-family:inherit}
-button.cmd.off{background:#7f1d1d}
-button.cmd.eco{background:#155e75}
+button.cmd.off{background:#7f1d1d}button.cmd.eco{background:#155e75}
 button.cmd:disabled{opacity:.35}
+button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;font-weight:700;
+color:#fff;background:var(--b);cursor:pointer;font-family:inherit}
+input,select{width:100%;padding:12px;margin-bottom:10px;border:1px solid var(--line);
+border-radius:10px;background:var(--bg);color:var(--txt);font-size:16.5px;font-family:inherit}
+label{display:block;font-size:13.5px;color:var(--mut);margin-bottom:4px}
+.inline{display:flex;gap:8px}.inline>*{flex:1}
+.radio{display:flex;align-items:center;gap:9px;margin-bottom:11px;font-size:16px}
+.radio input{width:auto;margin:0;transform:scale(1.2)}
+.days{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.day{flex:1;min-width:38px;padding:9px 0;text-align:center;font-size:13.5px;font-weight:600;
+border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--mut);
+cursor:pointer;user-select:none}
+.day.sel{background:var(--b);border-color:var(--b);color:#fff}
+.sched{display:flex;align-items:center;justify-content:space-between;gap:8px;
+padding:10px 0;border-bottom:1px solid var(--line);font-size:16px}
+.sched .del{background:none;color:var(--bad);font-size:20px;padding:2px 10px;width:auto}
+.sched .meta{color:var(--mut);font-size:13.5px}
+.empty{color:var(--mut);font-size:15px;padding:6px 0}
 .meta{font-size:14px;color:var(--mut);text-align:center;margin-top:12px}
+.off-note{color:var(--warn);font-size:14px;text-align:center;margin:0 0 10px;display:none}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
-background:#1e293b;border:1px solid var(--line);color:var(--txt);padding:11px 18px;
-border-radius:12px;font-size:15px;display:none;max-width:90vw}
+background:#1e293b;border:1px solid var(--line);color:var(--txt);padding:12px 18px;
+border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.5)}
 </style></head><body><div class="wrap">
 
 <header>
@@ -44,11 +63,14 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw}
   <button class="lang" id="lang" onclick="setLang(L=='en'?'ar':'en')">EN</button>
 </header>
 
+<div class="off-note" id="offnote"></div>
+
 <section>
   <div class="kv"><span data-k="device"></span>
     <span><span class="led" id="oled"></span> <span id="ost">-</span></span></div>
   <div class="kv"><span data-k="genset"></span>
     <span><span class="led" id="gled"></span> <span id="gst">-</span></span></div>
+  <div class="kv"><span data-k="devtime"></span><span id="now">-</span></div>
 </section>
 
 <section>
@@ -60,19 +82,82 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw}
   <div class="meta" id="seen"></div>
 </section>
 
+<section>
+  <h2 data-k="genTitle"></h2>
+  <div class="radio"><input type="radio" name="gs" id="gs_dis" value="disabled">
+    <label for="gs_dis" style="margin:0" data-k="gsDis"></label></div>
+  <div class="radio"><input type="radio" name="gs" id="gs_off" value="off">
+    <label for="gs_off" style="margin:0" data-k="gsOff"></label></div>
+  <div class="radio"><input type="radio" name="gs" id="gs_eco" value="eco">
+    <label for="gs_eco" style="margin:0" data-k="gsEco"></label></div>
+  <label data-k="gsDelay"></label><select id="g_delay"></select>
+  <button style="width:100%" onclick="saveGenset()" data-k="save"></button>
+</section>
+
+<section>
+  <h2 data-k="schedules"></h2>
+  <div id="slist"></div>
+  <div style="margin-top:12px">
+    <div class="inline">
+      <div><label data-k="action"></label>
+        <select id="s_act"><option value="on" data-k="on"></option>
+        <option value="off" data-k="off"></option>
+        <option value="eco" data-k="eco"></option></select></div>
+      <div><label data-k="at"></label><input id="s_time" type="time" value="14:00"></div>
+    </div>
+    <label data-k="days"></label>
+    <div class="days" id="s_days"></div>
+    <button style="width:100%" onclick="addSched()" data-k="add"></button>
+  </div>
+</section>
+
+<section>
+  <h2 data-k="timeTitle"></h2>
+  <div class="radio"><input type="radio" name="tm" id="tm_ntp" onchange="manualBox()">
+    <label for="tm_ntp" style="margin:0" data-k="ntp"></label></div>
+  <div class="radio"><input type="radio" name="tm" id="tm_man" onchange="manualBox()">
+    <label for="tm_man" style="margin:0" data-k="manual"></label></div>
+  <div id="manbox" style="display:none"><input id="t_iso" type="datetime-local"></div>
+  <label data-k="tz"></label>
+  <select id="t_tz">
+    <option value="Asia/Baghdad" data-k="baghdad"></option>
+    <option value="Asia/Dubai" data-k="dubai"></option>
+  </select>
+  <button style="width:100%" onclick="saveTime()" data-k="apply"></button>
+</section>
+
 </div><div id="toast"></div><script>
 var D={
-en:{device:'Air conditioner',genset:'Generator',on:'Turn ON',off:'Turn OFF',eco:'ECO mode',
+en:{device:'Air conditioner',genset:'Generator',devtime:'Device time',
+on:'Turn ON',off:'Turn OFF',eco:'ECO mode',
 online:'Online',offline:'Offline',det:'Running',nodet:'Off',
-sent:'Command sent.',err:'Error — try again.',noCode:'This button is not set up on the device.',
-seen:'Last update: ',never:'Device has not connected yet.',lang:'EN'},
-ar:{device:'المكيف',genset:'المولّدة',on:'تشغيل',off:'إطفاء',eco:'الوضع الاقتصادي',
+sent:'Command sent.',saved:'Saved.',err:'Error — try again.',
+seen:'Last update: ',never:'Device has not connected yet.',
+offline2:'The device is offline. Changes will apply when it reconnects.',
+genTitle:'AutoGenset',gsDis:'Disabled',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
+gsDelay:'Delay before sending',
+schedules:'Schedules',action:'Action',at:'Time',days:'Days',add:'Add schedule',
+none:'No schedules yet.',pickDay:'Pick at least one day.',
+timeTitle:'Time & clock',ntp:'Automatic (internet time)',manual:'Set manually',
+tz:'Time zone',apply:'Apply',baghdad:'Baghdad / Kuwait / Riyadh (GMT+3)',dubai:'Dubai (GMT+4)',
+lang:'عربي',dayS:['Sun','Mon','Tue','Wed','Thu','Fri','Sat']},
+ar:{device:'المكيف',genset:'المولّدة',devtime:'وقت الجهاز',
+on:'تشغيل',off:'إطفاء',eco:'الوضع الاقتصادي',
 online:'متصل',offline:'غير متصل',det:'تعمل',nodet:'متوقفة',
-sent:'تم إرسال الأمر.',err:'خطأ — حاول مجدداً.',noCode:'هذا الزر غير مُعدّ على الجهاز.',
-seen:'آخر تحديث: ',never:'الجهاز لم يتصل بعد.',lang:'EN'}};
-D.en.lang='عربي';
-var L='ar',ST=null;
-var CODE=location.pathname.split('/').pop();
+sent:'تم إرسال الأمر.',saved:'تم الحفظ.',err:'خطأ — حاول مجدداً.',
+seen:'آخر تحديث: ',never:'الجهاز لم يتصل بعد.',
+offline2:'الجهاز غير متصل. ستُطبَّق التغييرات عند عودته للاتصال.',
+genTitle:'كشف المولّدة تلقائياً',gsDis:'معطَّل',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
+gsDelay:'التأخير قبل الإرسال',
+schedules:'الجدولة',action:'الإجراء',at:'الوقت',days:'الأيام',add:'إضافة جدولة',
+none:'لا توجد جدولات بعد.',pickDay:'اختر يوماً واحداً على الأقل.',
+timeTitle:'الوقت والساعة',ntp:'تلقائي (وقت الإنترنت)',manual:'ضبط يدوي',
+tz:'المنطقة الزمنية',apply:'تطبيق',baghdad:'بغداد / الكويت / الرياض (+3)',dubai:'دبي (+4)',
+lang:'EN',dayS:['أحد','إثن','ثلا','أرب','خمي','جمع','سبت']}};
+var DELAYS=[3,5,10,15,30,60,120,300];
+var DELAYL={en:['3 seconds','5 seconds','10 seconds','15 seconds','30 seconds','1 minute','2 minutes','5 minutes'],
+ar:['٣ ثوانٍ','٥ ثوانٍ','١٠ ثوانٍ','١٥ ثانية','٣٠ ثانية','دقيقة واحدة','دقيقتان','٥ دقائق']};
+var L='ar',ST=null,selDays=[],first=true,CODE=location.pathname.split('/').pop();
 
 function t(k){return D[L][k]}
 function $(id){return document.getElementById(id)}
@@ -83,33 +168,65 @@ function setLang(l){L=l;try{localStorage.setItem('erl',l)}catch(e){}
 document.documentElement.lang=l;document.documentElement.dir=(l=='ar')?'rtl':'ltr';
 var els=document.querySelectorAll('[data-k]');
 for(var i=0;i<els.length;i++)els[i].textContent=t(els[i].getAttribute('data-k'));
-$('lang').textContent=t('lang');render()}
+$('lang').textContent=t('lang');
+var gd=$('g_delay'),cur=gd.value;gd.innerHTML='';
+DELAYS.forEach(function(v,i){var o=document.createElement('option');
+o.value=v;o.textContent=DELAYL[l][i];gd.appendChild(o)});if(cur)gd.value=cur;
+renderDays();render()}
+
+function renderDays(){var b=$('s_days');b.innerHTML='';
+for(var i=0;i<7;i++)(function(i){var d=document.createElement('div');
+d.className='day'+(selDays.indexOf(i)>=0?' sel':'');d.textContent=t('dayS')[i];
+d.onclick=function(){var p=selDays.indexOf(i);if(p>=0)selDays.splice(p,1);else selDays.push(i);
+renderDays()};b.appendChild(d)})(i)}
 
 function render(){if(!ST)return;
 var on=!!ST.online;
+$('offnote').textContent=t('offline2');$('offnote').style.display=on?'none':'block';
 $('oled').className='led'+(on?' on':'');
-$('ost').textContent=on?t('online'):t('offline');
-$('ost').style.color=on?'var(--ok)':'var(--bad)';
-$('gled').className='led'+(ST.genset?' on':'');
-$('gst').textContent=on?(ST.genset?t('det'):t('nodet')):'-';
-var c=ST.codes||{};
-['on','off','eco'].forEach(function(b){$('b_'+b).disabled=!on||!c[b]});
-$('seen').textContent=ST.lastSeen?t('seen')+new Date(ST.lastSeen)
-.toLocaleString(L=='ar'?'ar':'en-GB'):t('never')}
+$('ost').textContent=on?t('online'):t('offline');$('ost').style.color=on?'var(--ok)':'var(--bad)';
+var g=ST.genset||{};
+$('gled').className='led'+(g.detected?' on':'');
+$('gst').textContent=on?(g.detected?t('det'):t('nodet')):'-';
+var tt=ST.time||{};
+$('now').textContent=tt.valid?new Date(tt.epoch*1000).toLocaleString(L=='ar'?'ar':'en-GB'):'--:--';
+var c=ST.codes||{};['on','off','eco'].forEach(function(b){$('b_'+b).disabled=!on||!c[b]});
+$('seen').textContent=ST.lastSeen?t('seen')+new Date(ST.lastSeen).toLocaleString(L=='ar'?'ar':'en-GB'):t('never');
+var sl=$('slist');sl.innerHTML='';var arr=ST.schedules||[];
+if(!arr.length){sl.innerHTML='<div class="empty">'+t('none')+'</div>';}
+else arr.forEach(function(s){var d=document.createElement('div');d.className='sched';
+var days=(s.days||[]).map(function(i){return t('dayS')[i]}).join(' ');
+d.innerHTML='<div><b>'+t(s.action)+'</b> '+String(s.hour).padStart(2,'0')+':'+
+String(s.min).padStart(2,'0')+'<div class="meta">'+days+'</div></div>';
+var x=document.createElement('button');x.className='del';x.textContent='×';
+x.onclick=function(){delSched(s.id)};d.appendChild(x);sl.appendChild(d)});
+if(first){first=false;
+var el=$('gs_'+(g.mode=='off'?'off':g.mode=='eco'?'eco':'dis'));if(el)el.checked=true;
+if(g.delay&&DELAYS.indexOf(g.delay)>=0)$('g_delay').value=g.delay;
+if(tt.tz)$('t_tz').value=tt.tz;
+$('tm_ntp').checked=tt.ntp!==false;$('tm_man').checked=tt.ntp===false;manualBox()}}
+
+async function post(body){try{var r=await fetch('/api/r/'+CODE+'/cmd',{method:'POST',
+headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r.ok}catch(e){return false}}
+
+async function cmd(b){toast(await post({a:'send',btn:b})?t('sent'):t('err'))}
+async function saveGenset(){var m=document.querySelector('input[name="gs"]:checked').value;
+toast(await post({a:'genset',mode:m,delay:+$('g_delay').value,ssid:(ST.genset&&ST.genset.ssid)||'GENSET_ACTIVE'})?t('saved'):t('err'))}
+async function addSched(){if(!selDays.length){toast(t('pickDay'));return}
+var tm=$('s_time').value.split(':');
+if(await post({a:'sched_add',action:$('s_act').value,hour:+tm[0],min:+tm[1],days:selDays})){
+toast(t('saved'));selDays=[];renderDays()}else toast(t('err'))}
+async function delSched(id){await post({a:'sched_del',id:id})}
+function manualBox(){$('manbox').style.display=$('tm_man').checked?'block':'none'}
+async function saveTime(){var body={a:'time',ntp:$('tm_ntp').checked,tz:$('t_tz').value};
+if(!body.ntp){if(!$('t_iso').value){toast(t('err'));return}body.iso=$('t_iso').value}
+toast(await post(body)?t('saved'):t('err'))}
 
 async function refresh(){try{var r=await fetch('/api/r/'+CODE+'/state');
 if(r.ok){ST=await r.json();render()}}catch(e){}}
-
-async function cmd(b){try{
-var r=await fetch('/api/r/'+CODE+'/cmd',{method:'POST',
-headers:{'Content-Type':'application/json'},body:JSON.stringify({btn:b})});
-toast(r.ok?t('sent'):t('err'))}catch(e){toast(t('err'))}}
-
-function listen(){try{
-var es=new EventSource('/api/r/'+CODE+'/events');
+function listen(){try{var es=new EventSource('/api/r/'+CODE+'/events');
 es.onmessage=function(ev){try{ST=JSON.parse(ev.data);render()}catch(e){}};
-es.onerror=function(){es.close();setTimeout(listen,5000)};
-}catch(e){}}
+es.onerror=function(){es.close();setTimeout(listen,5000)}}catch(e){}}
 
 var s='ar';try{s=localStorage.getItem('erl')||'ar'}catch(e){}
 setLang(s);refresh();listen();setInterval(refresh,15000);

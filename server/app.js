@@ -156,10 +156,15 @@ app.post('/api/claim', (req, res) => {
     saveDb();
     console.log(`[claim] NEW ${id} -> code ${dev.code}`);
   }
+  // Always hand back an https link on the public domain. Prefer the Host the
+  // device actually reached us on (er.my.to via Caddy); fall back to BASE_URL.
+  // This avoids ever returning a raw http://IP link.
+  const host = String(req.headers.host || '').split(':')[0];
+  const base = host ? `https://${host}` : BASE_URL.replace(/^http:/, 'https:');
   res.json({
     ok: true,
     code: dev.code,
-    link: `${BASE_URL}/r/${dev.code}`,
+    link: `${base}/r/${dev.code}`,
     mqtt: { host: MQTT_HOST, port: MQTT_PORT },
   });
 });
@@ -174,11 +179,19 @@ app.get('/api/r/:code/state', rateLimit, (req, res) => {
   findByCode(req, res, (id) => res.json(snapshot(id)));
 });
 
+// Relay a command to the device. Accepts either {btn} (simple send) or a
+// full action {a:...} mirroring the device API (send/genset/time/sched_add/
+// sched_del) so the personal link has portal parity. Wi-Fi is intentionally
+// not relayable (see firmware note). The device validates everything.
+const ACTIONS = ['send', 'genset', 'time', 'sched_add', 'sched_del'];
 app.post('/api/r/:code/cmd', rateLimit, (req, res) => {
   findByCode(req, res, (id) => {
-    const btn = String((req.body || {}).btn || '');
-    if (!BTNS.includes(btn)) return res.status(400).json({ ok: false });
-    aedes.publish({ topic: `er/${id}/cmd`, payload: JSON.stringify({ btn }),
+    const body = req.body || {};
+    let msg = null;
+    if (typeof body.a === 'string' && ACTIONS.includes(body.a)) msg = body;
+    else if (BTNS.includes(String(body.btn || ''))) msg = { a: 'send', btn: body.btn };
+    if (!msg) return res.status(400).json({ ok: false });
+    aedes.publish({ topic: `er/${id}/cmd`, payload: JSON.stringify(msg),
                     qos: 0, retain: false }, () => {});
     res.json({ ok: true });
   });
