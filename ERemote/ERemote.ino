@@ -56,7 +56,7 @@ const uint8_t AP_CHANNEL  = 6;
 // ---- Remote access (cloud) ----
 // Your server: domain name or public IP of the VPS running server/app.js.
 // Used for the one-time claim call and as the default MQTT host.
-const char*    ER_HOST            = "SET-YOUR-DOMAIN-OR-IP";
+const char*    ER_HOST            = "er.my.to";
 const uint16_t ER_HTTP_PORT       = 80;      // claim endpoint port on ER_HOST
 const uint16_t ER_MQTT_PORT       = 1883;
 const uint32_t CLAIM_RETRY_MS     = 60000;   // retry claim every minute until it works
@@ -76,7 +76,7 @@ const uint32_t BOOT_GRACE_MS     = 8000;   // no *scheduled* send this soon afte
 const uint32_t AP_HOLD_AFTER_STA = 180000UL;   // 3 min (only if MANAGE_AP)
 const bool     MANAGE_AP         = false;
 
-const uint16_t RECORD_TIMEOUT_MS = 15000;
+const uint16_t RECORD_TIMEOUT_MS = 30000;  // matches the wizard's visible countdown
 
 // AutoGenset: how often to scan for the generator's Wi-Fi network. Each scan
 // makes the radio hop channels for ~2 s, briefly stalling AP/STA traffic, so
@@ -141,6 +141,7 @@ bool     timeValid     = false;
 bool     apOn          = true;
 uint32_t bootMillis    = 0;
 uint32_t staConnectedAt= 0;
+uint32_t staBeginAt    = 0;      // last WiFi.begin(); scans pause while associating
 int      lastSchedKey  = -1;
 
 String   recordTarget  = "";     // "on"/"off"/"eco" while capturing
@@ -271,7 +272,10 @@ void startAP(){
   apOn=true;
 }
 void connectSTA(){
-  if(cfg.ssid.length()){ WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str()); staConnectedAt=0; }
+  if(cfg.ssid.length()){
+    WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());
+    staConnectedAt=0; staBeginAt=millis();
+  }
 }
 void manageAP(){
   if(!MANAGE_AP) return;
@@ -557,6 +561,10 @@ void scanTask(){
     gensetSeen(found);
   } else if(n!=WIFI_SCAN_RUNNING &&
             (scanWanted || millis()-gsLastScanAt>GS_SCAN_INTERVAL_MS)){
+    // Never start a scan while the STA is mid-association: channel hopping
+    // during the handshake is what made Wi-Fi setup flaky in the field.
+    if(cfg.ssid.length() && WiFi.status()!=WL_CONNECTED &&
+       staBeginAt && millis()-staBeginAt<25000) return;
     gsLastScanAt=millis();
     WiFi.scanNetworks(true, true);                   // async, include hidden
   }
