@@ -5,8 +5,10 @@
    Libs   : ArduinoJson (v7), IRremoteESP8266, PubSubClient
 
    Flow:
-     - First boot  -> no /config.json -> serves the embedded SETUP WIZARD.
-       User taps "Initialize" -> device creates its data files -> main portal.
+     - First boot  -> no /config.json -> serves the step-by-step SETUP WIZARD
+       (wizard_html.h): language, record ON/OFF/ECO from the AC remote,
+       pick home Wi-Fi from a scanned list, optional genset setup, done.
+       Also reachable later from the portal via /?setup=1.
      - Normal boot -> serves the full control portal (portal_html.h, in flash).
      - Always AP+STA: open AP "ERemote" for the phone; STA joins the router
        (entered in the portal) for NTP time + internet.
@@ -40,57 +42,8 @@
 #include <IRutils.h>
 #include <time.h>
 #include "portal_html.h"      // PORTAL_HTML[]
+#include "wizard_html.h"      // SETUP_HTML[]  (first-run step-by-step wizard)
 
-/* ===================== embedded first-boot setup wizard ==================
-   NOTE: this must live ABOVE handleRoot(). The Arduino builder auto-generates
-   forward prototypes for functions only, never for variables, so a global
-   defined below its first use fails with "not declared in this scope". */
-const char SETUP_HTML[] PROGMEM = R"SETUP(
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ERemote setup</title><style>
-:root{--b:#0f766e;--b2:#0ea5a4}*{box-sizing:border-box}
-body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Tahoma,sans-serif;
-background:#0b1220;color:#e6edf5;display:grid;place-items:center;min-height:100vh;padding:24px}
-.card{max-width:380px;width:100%;background:#131c2b;border:1px solid #243244;border-radius:20px;
-padding:28px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.4);position:relative}
-.logo{width:56px;height:56px;border-radius:16px;margin:0 auto 14px;
-background:linear-gradient(135deg,var(--b),var(--b2));display:grid;place-items:center}
-.logo svg{width:30px;height:30px;color:#fff}
-h1{font-size:20px;margin:0 0 6px}p{color:#93a1b5;font-size:14px;line-height:1.6;margin:0 0 22px}
-button{border:0;border-radius:14px;padding:14px;font-size:15px;font-weight:700;
-color:#fff;background:var(--b);cursor:pointer;font-family:inherit}
-#go{width:100%}
-button:disabled{opacity:.6}.ok{color:#86efac;font-weight:600;margin-top:14px;display:none}
-.lang{position:absolute;top:14px;inset-inline-end:14px;padding:6px 14px;font-size:13px;
-font-weight:600;background:#243244;border-radius:10px}
-</style></head><body><div class="card">
-<button class="lang" id="lang" onclick="setLang(L=='en'?'ar':'en')">عربي</button>
-<div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-stroke-linecap="round"><path d="M4 6h16v9H4z"/><path d="M8 19h8M12 15v4"/><circle cx="8" cy="10.5" r="1"/>
-<path d="M12 9v3M16 9v3"/></svg></div>
-<h1 id="t1"></h1>
-<p id="t2"></p>
-<button id="go" onclick="init()"></button>
-<div class="ok" id="ok"></div>
-</div><script>
-var D={en:{t1:'Welcome to ERemote',
-t2:"Let's set up your smart AC remote. This creates the device's storage so your codes, Wi-Fi and schedules survive power loss.",
-go:'Initialize device',busy:'Setting up…',ok:'Ready! Loading portal…',lang:'عربي'},
-ar:{t1:'أهلاً بك في ERemote',
-t2:'لنقم بإعداد جهاز التحكم الذكي بالمكيف. هذه الخطوة تُنشئ ذاكرة الجهاز حتى تبقى الأكواد وشبكة الواي فاي والجداول محفوظة بعد انقطاع الكهرباء.',
-go:'تهيئة الجهاز',busy:'جارٍ الإعداد…',ok:'تم! جارٍ فتح لوحة التحكم…',lang:'EN'}};
-var L='ar';
-function setLang(l){L=l;try{localStorage.setItem('erl',l)}catch(e){}
-document.documentElement.lang=l;document.documentElement.dir=(l=='ar')?'rtl':'ltr';
-var d=D[l];t1.textContent=d.t1;t2.textContent=d.t2;go.textContent=d.go;
-ok.textContent=d.ok;lang.textContent=d.lang;}
-var s='ar';try{s=localStorage.getItem('erl')||'ar'}catch(e){}setLang(s);
-async function init(){var b=document.getElementById('go');b.disabled=true;b.textContent=D[L].busy;
-try{await fetch('/api/init',{method:'POST'});}catch(e){}
-document.getElementById('ok').style.display='block';setTimeout(function(){location.href='/';},900);}
-</script></body></html>
-)SETUP";
 
 /* ----------------------------- USER SETTINGS ----------------------------- */
 #define IR_TX_PIN   D2        // GPIO4  -> transistor base
@@ -204,6 +157,12 @@ bool     gsPresent     = false;  // generator network currently visible
 bool     gsTriggered   = false;  // already fired for this appearance
 uint8_t  gsMiss        = 0;      // consecutive scans without the network
 uint32_t gsLastScanAt  = 0;
+
+// Shared Wi-Fi scan cache: one scanner feeds both the genset detector and
+// the /api/scan network list used by the wizard and portal.
+String   scanJson      = "[]";   // [{"n":ssid,"db":rssi,"sec":bool},...]
+uint32_t scanDoneAt    = 0;
+bool     scanWanted    = false;  // a client asked for a fresh list
 
 // Remote access runtime state
 uint32_t lastClaimAt   = 0;
@@ -349,7 +308,19 @@ void sendJson(int code, const String& body){ server.send(code,"application/json"
 bool bodyJson(JsonDocument& d){ return server.hasArg("plain") && !deserializeJson(d, server.arg("plain")); }
 
 void handleRoot(){
-  server.send_P(200, "text/html", provisioned ? PORTAL_HTML : SETUP_HTML);
+  // Wizard on first run, or on demand via the portal's "run setup wizard".
+  bool wizard = !provisioned || server.hasArg("setup");
+  server.send_P(200, "text/html", wizard ? SETUP_HTML : PORTAL_HTML);
+}
+
+void handleScan(){
+  scanWanted=true;                       // ask scanTask for a fresh sweep
+  String out = "{\"scanning\":";
+  out += (WiFi.scanComplete()==WIFI_SCAN_RUNNING) ? "true" : "false";
+  out += ",\"age\":";
+  out += scanDoneAt ? String(millis()-scanDoneAt) : String(-1);
+  out += ",\"networks\":" + scanJson + "}";
+  sendJson(200,out);
 }
 
 void handleInit(){                       // first-boot provisioning
@@ -538,30 +509,54 @@ void checkSchedules(){
   }
 }
 
-void gensetTask(){
-  // Detection always runs so the portal's indicator LED works even when the
-  // automatic action is disabled; only the IR send is gated on the mode.
+void gensetSeen(bool found){
+  // Trigger/re-arm state machine. Detection always runs so the indicator
+  // LED works even when the automatic action is disabled; only the IR send
+  // is gated on the mode.
   bool armed = (cfg.gsMode=="off" || cfg.gsMode=="eco");
+  if(found){
+    gsMiss=0;
+    if(!gsPresent){                                  // generator just came on
+      gsPresent=true; statePubQueued=true;
+      if(armed && !gsTriggered && LittleFS.exists(irPath(cfg.gsMode))){
+        pendingSend=cfg.gsMode;
+        sendAt=millis()+cfg.gsDelay*1000UL;
+        gsTriggered=true;
+      }
+    }
+  } else if(gsPresent && ++gsMiss>=2){               // gone for 2 scans -> re-arm
+    gsPresent=false; gsTriggered=false; gsMiss=0; statePubQueued=true;
+  }
+}
+
+void scanTask(){
+  // Single owner of the Wi-Fi scanner: feeds the genset detector and the
+  // /api/scan network list (wizard + portal Wi-Fi pickers).
   int n=WiFi.scanComplete();
   if(n>=0){                                          // a scan just finished
     bool found=false;
-    for(int i=0;i<n;i++) if(WiFi.SSID(i)==cfg.gsSsid){ found=true; break; }
-    WiFi.scanDelete();
-    if(found){
-      gsMiss=0;
-      if(!gsPresent){                                // generator just came on
-        gsPresent=true; statePubQueued=true;
-        if(armed && !gsTriggered && LittleFS.exists(irPath(cfg.gsMode))){
-          pendingSend=cfg.gsMode;
-          sendAt=millis()+cfg.gsDelay*1000UL;
-          gsTriggered=true;
-        }
+    JsonDocument d; JsonArray a=d.to<JsonArray>();
+    for(int i=0;i<n;i++){
+      String ss=WiFi.SSID(i);
+      if(ss==cfg.gsSsid) found=true;
+      if(!ss.length()) continue;                     // hidden networks
+      bool dup=false;
+      for(JsonObject o:a) if(ss==(const char*)o["n"]){
+        dup=true;
+        if((int)o["db"]<WiFi.RSSI(i)) o["db"]=WiFi.RSSI(i);
+        break;
       }
-    } else if(gsPresent && ++gsMiss>=2){             // gone for 2 scans -> re-arm
-      gsPresent=false; gsTriggered=false; gsMiss=0; statePubQueued=true;
+      if(dup || a.size()>=15) continue;
+      JsonObject o=a.add<JsonObject>();
+      o["n"]=ss; o["db"]=WiFi.RSSI(i);
+      o["sec"]=(WiFi.encryptionType(i)!=ENC_TYPE_NONE);
     }
+    scanJson=""; serializeJson(d,scanJson);
+    scanDoneAt=millis(); scanWanted=false;
+    WiFi.scanDelete();
+    gensetSeen(found);
   } else if(n!=WIFI_SCAN_RUNNING &&
-            millis()-gsLastScanAt>GS_SCAN_INTERVAL_MS){
+            (scanWanted || millis()-gsLastScanAt>GS_SCAN_INTERVAL_MS)){
     gsLastScanAt=millis();
     WiFi.scanNetworks(true, true);                   // async, include hidden
   }
@@ -701,6 +696,7 @@ void setup(){
   for(auto p : probes) server.on(p, redirectToSelf);
   server.on("/api/init",      HTTP_POST,   handleInit);
   server.on("/api/status",    HTTP_GET,    handleStatus);
+  server.on("/api/scan",      HTTP_GET,    handleScan);
   server.on("/api/record",    HTTP_POST,   handleRecord);
   server.on("/api/send",      HTTP_POST,   handleSend);
   server.on("/api/wifi",      HTTP_POST,   handleWifiSave);
@@ -726,7 +722,7 @@ void loop(){
   if(!timeValid && time(nullptr)>100000) timeValid=true;
   manageAP();
   checkSchedules();
-  gensetTask();
+  scanTask();
   claimTask();
   mqttTask();
   clearDRD();
