@@ -104,6 +104,7 @@ const uint8_t AP_CHANNEL  = 6;
 // Your server: domain name or public IP of the VPS running server/app.js.
 // Used for the one-time claim call and as the default MQTT host.
 const char*    ER_HOST            = "SET-YOUR-DOMAIN-OR-IP";
+const uint16_t ER_HTTP_PORT       = 80;      // claim endpoint port on ER_HOST
 const uint16_t ER_MQTT_PORT       = 1883;
 const uint32_t CLAIM_RETRY_MS     = 60000;   // retry claim every minute until it works
 const uint32_t MQTT_RETRY_MS      = 30000;   // MQTT reconnect attempt interval
@@ -206,6 +207,7 @@ uint32_t gsLastScanAt  = 0;
 
 // Remote access runtime state
 uint32_t lastClaimAt   = 0;
+int      lastClaimRc   = 0;      // 0=never tried; >0 HTTP status; <0 connection error
 uint32_t lastMqttTry   = 0;
 uint32_t lastStatePub  = 0;
 bool     statePubQueued= false;  // something changed -> publish state soon
@@ -388,6 +390,7 @@ void handleStatus(){
   d["remote"]["code"]=ident.code;
   d["remote"]["link"]=ident.link;
   d["remote"]["mqtt"]=mqtt.connected();
+  d["remote"]["lastRc"]=lastClaimRc;
 
   JsonDocument sd; readSched(sd);
   d["schedules"]=sd.as<JsonArray>();
@@ -578,11 +581,13 @@ void claimTask(){
 
   WiFiClient net; HTTPClient http;
   http.setTimeout(8000);
-  if(!http.begin(net, String("http://")+ER_HOST+"/api/claim")) return;
+  if(!http.begin(net, ER_HOST, ER_HTTP_PORT, "/api/claim")) return;
   http.addHeader("Content-Type","application/json");
   JsonDocument d; d["id"]=devId; d["secret"]=ident.secret; d["fw"]="1.0";
   String body; serializeJson(d,body);
   int rc=http.POST(body);
+  lastClaimRc=rc;                  // negative = HTTPClient error (unreachable etc.)
+  Serial.printf("claim %s:%u -> %d\n", ER_HOST, ER_HTTP_PORT, rc);
   if(rc==200){
     JsonDocument r;
     if(deserializeJson(r,http.getString())==DeserializationError::Ok && (r["ok"]|false)){

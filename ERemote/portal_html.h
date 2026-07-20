@@ -105,6 +105,7 @@ border-radius:12px;font-size:14px;display:none;max-width:90vw;box-shadow:0 8px 2
     <button class="sec" onclick="copyLink()" data-k="copy"></button></div>
   </div>
   <p class="desc" id="rwait" data-k="rWait" style="display:none;margin:8px 0 0"></p>
+  <p class="desc" id="rerr" style="display:none;margin:6px 0 0;color:var(--warn)"></p>
 </section>
 
 <section>
@@ -196,6 +197,9 @@ rDesc:'Control this AC from anywhere over the internet using your personal link.
 rLink:'Your personal link',copy:'Copy',copied:'Link copied.',
 rOn:'Connected to server',rOff:'Not connected',
 rWait:'Waiting for internet connection to set up remote access…',
+rErrNet:'Cannot reach the server — check the server address, that it is running, and that port 80 is open.',
+rErr403:'The server refused this device (identity conflict) — an old registration for this chip must be deleted on the server.',
+rErrHttp:'Server error (HTTP ',
 genset:'AutoGenset',
 gsDesc:"When the generator's Wi-Fi network appears (neighborhood genset switched on), the device automatically sends a command to the AC.",
 gsDis:'Disabled',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
@@ -225,6 +229,9 @@ rDesc:'تحكم بهذا المكيف من أي مكان عبر الإنترنت
 rLink:'رابطك الخاص',copy:'نسخ',copied:'تم نسخ الرابط.',
 rOn:'متصل بالخادم',rOff:'غير متصل',
 rWait:'بانتظار الاتصال بالإنترنت لإعداد التحكم عن بُعد…',
+rErrNet:'تعذّر الوصول للخادم — تحقق من عنوان الخادم وأنه يعمل وأن المنفذ 80 مفتوح.',
+rErr403:'رفض الخادم هذا الجهاز (تعارض هوية) — يجب حذف التسجيل القديم لهذه الشريحة من الخادم.',
+rErrHttp:'خطأ من الخادم (HTTP ',
 genset:'كشف المولّدة تلقائياً',
 gsDesc:'عند ظهور شبكة واي فاي المولّدة (تشغيل مولّدة الحي)، يرسل الجهاز أمراً للمكيف تلقائياً.',
 gsDis:'معطَّل',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
@@ -286,8 +293,12 @@ $('rled').className='led'+(r.mqtt?' on':'');
 $('rst').textContent=r.mqtt?t('rOn'):t('rOff');
 $('rst').style.color=r.mqtt?'var(--ok)':'var(--mut)';
 if(r.claimed&&r.link){$('rlinkbox').style.display='block';
-$('rwait').style.display='none';$('rlink').value=r.link}
-else{$('rlinkbox').style.display='none';$('rwait').style.display='block'}
+$('rwait').style.display='none';$('rerr').style.display='none';$('rlink').value=r.link}
+else{$('rlinkbox').style.display='none';$('rwait').style.display='block';
+var rc=r.lastRc|0,e=$('rerr');
+if(rc===0){e.style.display='none'}
+else{e.style.display='block';
+e.textContent=rc<0?t('rErrNet'):rc==403?t('rErr403'):t('rErrHttp')+rc+')'}}
 var sl=$('slist');sl.innerHTML='';var arr=ST.schedules||[];
 if(!arr.length){sl.innerHTML='<div class="empty">'+t('none')+'</div>';return}
 arr.forEach(function(s){var d=document.createElement('div');d.className='sched';
