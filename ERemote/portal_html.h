@@ -105,6 +105,7 @@ border-radius:12px;font-size:14px;display:none;max-width:90vw;box-shadow:0 8px 2
     <button class="sec" onclick="copyLink()" data-k="copy"></button></div>
   </div>
   <p class="desc" id="rwait" data-k="rWait" style="display:none;margin:8px 0 0"></p>
+  <p class="desc" id="rerr" style="display:none;margin:6px 0 0;color:var(--warn)"></p>
 </section>
 
 <section>
@@ -149,7 +150,10 @@ border-radius:12px;font-size:14px;display:none;max-width:90vw;box-shadow:0 8px 2
   <div class="kv"><span data-k="status"></span><span id="wst"></span></div>
   <div class="kv"><span>IP</span><span id="wip">-</span></div>
   <div style="margin-top:8px">
-    <label data-k="ssid"></label><input id="w_ssid" maxlength="32">
+    <label data-k="ssid"></label>
+    <div class="linkrow"><select id="w_sel" onchange="wSel()"></select>
+    <button class="sec" onclick="wScan(1)" data-k="rescan"></button></div>
+    <input id="w_ssid" maxlength="32" style="display:none">
     <label data-k="pass"></label><input id="w_pass" type="password" maxlength="64">
     <div class="inline">
       <button onclick="wifiSave()" data-k="save"></button>
@@ -178,6 +182,8 @@ border-radius:12px;font-size:14px;display:none;max-width:90vw;box-shadow:0 8px 2
 
 <section>
   <h2 data-k="advanced"></h2>
+  <button class="sec" style="width:100%;margin-bottom:10px"
+    onclick="location.href='/?setup=1'" data-k="wizBtn"></button>
   <button class="danger" onclick="factory()" data-k="factory"></button>
 </section>
 
@@ -196,6 +202,9 @@ rDesc:'Control this AC from anywhere over the internet using your personal link.
 rLink:'Your personal link',copy:'Copy',copied:'Link copied.',
 rOn:'Connected to server',rOff:'Not connected',
 rWait:'Waiting for internet connection to set up remote access…',
+rErrNet:'Cannot reach the server — check the server address, that it is running, and that port 80 is open.',
+rErr403:'The server refused this device (identity conflict) — an old registration for this chip must be deleted on the server.',
+rErrHttp:'Server error (HTTP ',
 genset:'AutoGenset',
 gsDesc:"When the generator's Wi-Fi network appears (neighborhood genset switched on), the device automatically sends a command to the AC.",
 gsDis:'Disabled',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
@@ -203,7 +212,8 @@ gsDelay:'Delay before sending',gsSsid:'Generator network name',
 gsDet:'Generator detected',gsNo:'Not detected',
 delayS:['3 seconds','5 seconds','10 seconds','15 seconds','30 seconds','1 minute','2 minutes','5 minutes'],
 wifi:'Wi-Fi',status:'Status',conn:'Connected',noconn:'Not connected',
-ssid:'Network name (SSID)',pass:'Password',save:'Save',forget:'Forget network',
+ssid:'Wi-Fi name',pass:'Password',save:'Save',forget:'Forget network',
+rescan:'Refresh',otherNet:'Other network…',wizBtn:'Run setup wizard',
 time:'Time & clock',devtime:'Device time',ntp:'Automatic (internet time)',
 manual:'Set manually',tz:'Time zone',apply:'Apply',
 baghdad:'Baghdad / Kuwait / Riyadh (GMT+3)',dubai:'Dubai (GMT+4)',
@@ -225,6 +235,9 @@ rDesc:'تحكم بهذا المكيف من أي مكان عبر الإنترنت
 rLink:'رابطك الخاص',copy:'نسخ',copied:'تم نسخ الرابط.',
 rOn:'متصل بالخادم',rOff:'غير متصل',
 rWait:'بانتظار الاتصال بالإنترنت لإعداد التحكم عن بُعد…',
+rErrNet:'تعذّر الوصول للخادم — تحقق من عنوان الخادم وأنه يعمل وأن المنفذ 80 مفتوح.',
+rErr403:'رفض الخادم هذا الجهاز (تعارض هوية) — يجب حذف التسجيل القديم لهذه الشريحة من الخادم.',
+rErrHttp:'خطأ من الخادم (HTTP ',
 genset:'كشف المولّدة تلقائياً',
 gsDesc:'عند ظهور شبكة واي فاي المولّدة (تشغيل مولّدة الحي)، يرسل الجهاز أمراً للمكيف تلقائياً.',
 gsDis:'معطَّل',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
@@ -232,7 +245,8 @@ gsDelay:'التأخير قبل الإرسال',gsSsid:'اسم شبكة المو�
 gsDet:'تم كشف المولّدة',gsNo:'غير مكشوفة',
 delayS:['٣ ثوانٍ','٥ ثوانٍ','١٠ ثوانٍ','١٥ ثانية','٣٠ ثانية','دقيقة واحدة','دقيقتان','٥ دقائق'],
 wifi:'الواي فاي',status:'الحالة',conn:'متصل',noconn:'غير متصل',
-ssid:'اسم الشبكة (SSID)',pass:'كلمة المرور',save:'حفظ',forget:'نسيان الشبكة',
+ssid:'اسم شبكة الواي فاي',pass:'كلمة المرور',save:'حفظ',forget:'نسيان الشبكة',
+rescan:'تحديث',otherNet:'شبكة أخرى…',wizBtn:'إعادة تشغيل معالج الإعداد',
 time:'الوقت والساعة',devtime:'وقت الجهاز',ntp:'تلقائي (وقت الإنترنت)',
 manual:'ضبط يدوي',tz:'المنطقة الزمنية',apply:'تطبيق',
 baghdad:'بغداد / الكويت / الرياض (+3)',dubai:'دبي (+4)',
@@ -254,6 +268,9 @@ document.documentElement.lang=l;document.documentElement.dir=(l=='ar')?'rtl':'lt
 var els=document.querySelectorAll('[data-k]');
 for(var i=0;i<els.length;i++)els[i].textContent=t(els[i].getAttribute('data-k'));
 $('lang').textContent=t('lang');
+var so=$('w_sel');
+if(so)for(var i=0;i<so.options.length;i++)
+if(so.options[i].value=='__other')so.options[i].textContent=t('otherNet');
 var gd=$('g_delay'),cur=gd.value;gd.innerHTML='';
 DELAYS.forEach(function(v,i){var o=document.createElement('option');
 o.value=v;o.textContent=t('delayS')[i];gd.appendChild(o)});
@@ -273,7 +290,6 @@ s.textContent=ok?t('recorded'):t('empty');s.className='st'+(ok?' on':'')});
 var w=ST.wifi||{};$('wst').textContent=w.connected?t('conn'):t('noconn');
 $('wst').style.color=w.connected?'var(--ok)':'var(--bad)';
 $('wip').textContent=w.connected?w.ip:'-';
-if(!$('w_ssid').value&&w.ssid)$('w_ssid').value=w.ssid;
 var tt=ST.time||{};
 $('now').textContent=tt.valid?new Date(tt.epoch*1000).toLocaleString(L=='ar'?'ar':'en-GB'):'--:--';
 $('clock').textContent=$('now').textContent;
@@ -286,8 +302,12 @@ $('rled').className='led'+(r.mqtt?' on':'');
 $('rst').textContent=r.mqtt?t('rOn'):t('rOff');
 $('rst').style.color=r.mqtt?'var(--ok)':'var(--mut)';
 if(r.claimed&&r.link){$('rlinkbox').style.display='block';
-$('rwait').style.display='none';$('rlink').value=r.link}
-else{$('rlinkbox').style.display='none';$('rwait').style.display='block'}
+$('rwait').style.display='none';$('rerr').style.display='none';$('rlink').value=r.link}
+else{$('rlinkbox').style.display='none';$('rwait').style.display='block';
+var rc=r.lastRc|0,e=$('rerr');
+if(rc===0){e.style.display='none'}
+else{e.style.display='block';
+e.textContent=rc<0?t('rErrNet'):rc==403?t('rErr403'):t('rErrHttp')+rc+')'}}
 var sl=$('slist');sl.innerHTML='';var arr=ST.schedules||[];
 if(!arr.length){sl.innerHTML='<div class="empty">'+t('none')+'</div>';return}
 arr.forEach(function(s){var d=document.createElement('div');d.className='sched';
@@ -306,7 +326,8 @@ $('tm_ntp').checked=!!tt.ntp;$('tm_man').checked=!tt.ntp;manualBox();
 var g=ST.genset||{};
 var el=$('gs_'+(g.mode=='off'?'off':g.mode=='eco'?'eco':'dis'));if(el)el.checked=true;
 if(g.delay&&DELAYS.indexOf(g.delay)>=0)$('g_delay').value=g.delay;
-if(g.ssid)$('g_ssid').value=g.ssid}
+if(g.ssid)$('g_ssid').value=g.ssid;
+wScan(1)}
 render()}catch(e){}}
 
 async function doSend(b){if(ST&&ST.codes&&ST.codes[b]&&!ST.codes[b].set){toast(t('noCode'));return}
@@ -333,8 +354,34 @@ if(r.ok){toast(t('saved'));refresh()}else toast(t('err'))}catch(e){toast(t('err'
 async function delSched(id){try{await fetch('/api/schedule?id='+id,{method:'DELETE'});
 refresh()}catch(e){toast(t('err'))}}
 
-async function wifiSave(){try{var r=await fetch('/api/wifi',{method:'POST',
-body:JSON.stringify({ssid:$('w_ssid').value,pass:$('w_pass').value})});
+var scanTries=0;
+async function wScan(force){
+if(force)scanTries=0;
+try{var r=await fetch('/api/scan');var s=await r.json();
+var sel=$('w_sel'),cur=sel.value;
+if(s.networks&&s.networks.length){
+s.networks.sort(function(a,b){return b.db-a.db});
+sel.innerHTML='';
+s.networks.forEach(function(nw){var o=document.createElement('option');
+o.value=nw.n;o.textContent=nw.n;sel.appendChild(o)});
+var oo=document.createElement('option');oo.value='__other';
+oo.textContent=t('otherNet');sel.appendChild(oo);
+var want=cur&&cur!='__other'?cur:((ST&&ST.wifi&&ST.wifi.ssid)||'');
+if(want){var found=false;
+for(var i=0;i<sel.options.length;i++)if(sel.options[i].value===want){found=true;break}
+if(!found){var o2=document.createElement('option');o2.value=want;
+o2.textContent=want;sel.insertBefore(o2,sel.firstChild)}
+sel.value=want}
+wSel()}
+else if(scanTries++<6)setTimeout(function(){wScan(0)},2000)
+}catch(e){}}
+function wSel(){$('w_ssid').style.display=($('w_sel').value=='__other')?'block':'none'}
+function wName(){var sel=$('w_sel');
+return (sel&&sel.value&&sel.value!='__other')?sel.value:$('w_ssid').value}
+
+async function wifiSave(){var n=wName();if(!n){toast(t('err'));return}
+try{var r=await fetch('/api/wifi',{method:'POST',
+body:JSON.stringify({ssid:n,pass:$('w_pass').value})});
 toast(r.ok?t('saved'):t('err'));setTimeout(refresh,4000)}catch(e){toast(t('err'))}}
 async function wifiForget(){try{await fetch('/api/wifi',{method:'DELETE'});
 $('w_ssid').value='';$('w_pass').value='';toast(t('saved'));refresh()}catch(e){toast(t('err'))}}
