@@ -374,7 +374,9 @@ void handleStatus(){
 
   d["remote"]["claimed"]=(bool)ident.claimed;
   d["remote"]["code"]=ident.code;
-  d["remote"]["link"]=ident.link;
+  // Always build the link from ER_HOST (the DNS name) + code, so it never
+  // shows a stale server-supplied IP that got cached at claim time.
+  d["remote"]["link"]=ident.code[0] ? (String("https://")+ER_HOST+"/r/"+ident.code) : String("");
   d["remote"]["mqtt"]=mqtt.connected();
   d["remote"]["lastRc"]=lastClaimRc;
 
@@ -417,16 +419,14 @@ void setManualTime(const char* iso){
   time_t t=mktime(&tm); struct timeval tv={t,0}; settimeofday(&tv,nullptr);
   timeValid=true;
 }
-void handleTime(){
-  JsonDocument d; if(!bodyJson(d)){ sendJson(400,"{\"ok\":false}"); return; }
+// Core config logic, shared by the local HTTP API and the remote MQTT
+// command channel so the personal link has full parity with the portal.
+void applyTimeCfg(JsonDocument& d){
   cfg.ntp=d["ntp"]|true; cfg.tz=(const char*)(d["tz"]|"Asia/Baghdad"); saveConfig();
   if(cfg.ntp){ timeValid=false; applyTime(); }
   else if(d["iso"].is<const char*>()) setManualTime(d["iso"]);
-  sendJson(200,"{\"ok\":true}");
 }
-
-void handleGenset(){
-  JsonDocument d; if(!bodyJson(d)){ sendJson(400,"{\"ok\":false}"); return; }
+void applyGensetCfg(JsonDocument& d){
   String m=(const char*)(d["mode"]|"disabled");
   cfg.gsMode=(m=="off"||m=="eco") ? m : "disabled";
   cfg.gsDelay=d["delay"]|3;
@@ -434,16 +434,8 @@ void handleGenset(){
   if(!cfg.gsSsid.length()) cfg.gsSsid="GENSET_ACTIVE";
   saveConfig();
   gsPresent=false; gsTriggered=false; gsMiss=0;   // re-arm with new settings
-  sendJson(200,"{\"ok\":true}");
 }
-
-void handleSchedGet(){
-  File f=LittleFS.open("/sched.json","r");
-  if(!f){ sendJson(200,"[]"); return; }
-  server.streamFile(f,"application/json"); f.close();
-}
-void handleSchedPost(){
-  JsonDocument in; if(!bodyJson(in)){ sendJson(400,"{\"ok\":false}"); return; }
+uint32_t schedAdd(JsonDocument& in){
   JsonDocument arr; readSched(arr); JsonArray a=arr.as<JsonArray>();
   uint32_t id = in["id"].is<uint32_t>() ? (uint32_t)in["id"] : (uint32_t)(millis());
   JsonObject o=a.add<JsonObject>();
@@ -452,14 +444,35 @@ void handleSchedPost(){
   JsonArray days=o["days"].to<JsonArray>();
   for(JsonVariant v: in["days"].as<JsonArray>()) days.add((int)v);
   writeSched(arr);
+  return id;
+}
+void schedDel(uint32_t id){
+  JsonDocument arr; readSched(arr); JsonArray a=arr.as<JsonArray>();
+  for(size_t i=0;i<a.size();i++){ if((uint32_t)a[i]["id"]==id){ a.remove(i); break; } }
+  writeSched(arr);
+}
+
+void handleTime(){
+  JsonDocument d; if(!bodyJson(d)){ sendJson(400,"{\"ok\":false}"); return; }
+  applyTimeCfg(d); sendJson(200,"{\"ok\":true}");
+}
+void handleGenset(){
+  JsonDocument d; if(!bodyJson(d)){ sendJson(400,"{\"ok\":false}"); return; }
+  applyGensetCfg(d); sendJson(200,"{\"ok\":true}");
+}
+void handleSchedGet(){
+  File f=LittleFS.open("/sched.json","r");
+  if(!f){ sendJson(200,"[]"); return; }
+  server.streamFile(f,"application/json"); f.close();
+}
+void handleSchedPost(){
+  JsonDocument in; if(!bodyJson(in)){ sendJson(400,"{\"ok\":false}"); return; }
+  uint32_t id=schedAdd(in);
   sendJson(200, "{\"ok\":true,\"id\":"+String(id)+"}");
 }
 void handleSchedDel(){
   if(!server.hasArg("id")){ sendJson(400,"{\"ok\":false}"); return; }
-  uint32_t id=strtoul(server.arg("id").c_str(),nullptr,10);
-  JsonDocument arr; readSched(arr); JsonArray a=arr.as<JsonArray>();
-  for(size_t i=0;i<a.size();i++){ if((uint32_t)a[i]["id"]==id){ a.remove(i); break; } }
-  writeSched(arr);
+  schedDel(strtoul(server.arg("id").c_str(),nullptr,10));
   sendJson(200,"{\"ok\":true}");
 }
 
@@ -647,17 +660,30 @@ void claimTask(){
 String stateTopic(){ return "er/"+devId+"/state"; }
 String cmdTopic()  { return "er/"+devId+"/cmd";  }
 
+// Remote commands from the server relay (personal link). Full parity with
+// the local portal EXCEPT Wi-Fi, which is deliberately local-only: changing
+// the network from afar could drop the device off the internet and lock the
+// owner out. Action field "a"; a bare {"btn":...} still works (back-compat).
 void mqttCallback(char* topic, byte* payload, unsigned int len){
   (void)topic;
   String p; p.reserve(len);
   for(unsigned int i=0;i<len;i++) p+=(char)payload[i];
-  String b=p;
-  if(p.indexOf('{')>=0){ JsonDocument d; if(!deserializeJson(d,p)) b=(const char*)(d["btn"]|""); }
-  b.trim();
-  if(validBtn(b) && LittleFS.exists(irPath(b))){
-    pendingSend=b; sendAt=millis();
-    statePubQueued=true;
+  JsonDocument d;
+  if(deserializeJson(d,p)){                        // not JSON: treat as a button
+    String b=p; b.trim();
+    if(validBtn(b) && LittleFS.exists(irPath(b))){ pendingSend=b; sendAt=millis(); }
+    statePubQueued=true; return;
   }
+  String a=(const char*)(d["a"]|"");
+  if(a=="" && d["btn"].is<const char*>()) a="send";
+  if(a=="send"){
+    String b=(const char*)(d["btn"]|"");
+    if(validBtn(b) && LittleFS.exists(irPath(b))){ pendingSend=b; sendAt=millis(); }
+  } else if(a=="genset"){ applyGensetCfg(d); }
+  else if(a=="time"){ applyTimeCfg(d); }
+  else if(a=="sched_add"){ schedAdd(d); }
+  else if(a=="sched_del"){ schedDel((uint32_t)(d["id"]|0)); }
+  statePubQueued=true;                             // echo new state back
 }
 
 void publishState(){
@@ -667,7 +693,16 @@ void publishState(){
   d["codes"]["on"] =LittleFS.exists(irPath("on"));
   d["codes"]["off"]=LittleFS.exists(irPath("off"));
   d["codes"]["eco"]=LittleFS.exists(irPath("eco"));
-  d["genset"]=gsPresent;
+  d["genset"]["detected"]=gsPresent;               // full genset config so the
+  d["genset"]["mode"]=cfg.gsMode;                  // personal link can edit it
+  d["genset"]["delay"]=cfg.gsDelay;
+  d["genset"]["ssid"]=cfg.gsSsid;
+  d["time"]["valid"]=timeValid;
+  d["time"]["epoch"]=(uint32_t)time(nullptr);
+  d["time"]["ntp"]=cfg.ntp;
+  d["time"]["tz"]=cfg.tz;
+  JsonDocument sd; readSched(sd);
+  d["schedules"]=sd.as<JsonArray>();
   d["rssi"]=WiFi.RSSI();
   String out; serializeJson(d,out);
   mqtt.publish(stateTopic().c_str(), out.c_str(), true);   // retained
@@ -717,7 +752,7 @@ void setup(){
   EEPROM.begin(sizeof(Identity));
   loadIdentity();            // mints the device secret on very first boot
   devId = "d" + String(ESP.getChipId(), HEX);
-  mqtt.setBufferSize(512);
+  mqtt.setBufferSize(1024);   // room for state incl. schedules
 
   WiFi.persistent(false);
   WiFi.mode(WIFI_AP_STA);
