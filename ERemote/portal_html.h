@@ -59,6 +59,9 @@ padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
 .radio{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px}
 .radio input{width:auto;margin:0}
 .desc{font-size:13px;color:var(--mut);margin:0 0 10px;line-height:1.5}
+.linkrow{display:flex;gap:8px}
+.linkrow input{direction:ltr;text-align:left;font-size:13px;margin-bottom:0}
+.linkrow button{flex:none}
 .led{width:14px;height:14px;border-radius:50%;background:#4b5563;flex:none;
 display:inline-block;transition:background .3s,box-shadow .3s}
 .led.on{background:#22c55e;box-shadow:0 0 12px rgba(34,197,94,.85);
@@ -89,6 +92,19 @@ border-radius:12px;font-size:14px;display:none;max-width:90vw;box-shadow:0 8px 2
     <div class="acts"><button onclick="doSend('eco')" data-k="send"></button>
     <button class="sec" onclick="doRec('eco')" data-k="rec"></button></div></div>
   <div class="msg" id="recmsg"></div>
+</section>
+
+<section>
+  <h2 style="display:flex;align-items:center;gap:9px"><span class="led" id="rled"></span>
+  <span data-k="rTitle"></span></h2>
+  <p class="desc" data-k="rDesc"></p>
+  <div class="kv"><span data-k="status"></span><span id="rst">-</span></div>
+  <div id="rlinkbox" style="display:none;margin-top:8px">
+    <label data-k="rLink"></label>
+    <div class="linkrow"><input id="rlink" readonly>
+    <button class="sec" onclick="copyLink()" data-k="copy"></button></div>
+  </div>
+  <p class="desc" id="rwait" data-k="rWait" style="display:none;margin:8px 0 0"></p>
 </section>
 
 <section>
@@ -175,6 +191,11 @@ recOvf:'Signal too long for the buffer — try again from ~30 cm away.',
 queued:'Command sent.',
 schedules:'Schedules',action:'Action',at:'Time',days:'Days',add:'Add schedule',
 none:'No schedules yet.',pickDay:'Pick at least one day.',
+rTitle:'Remote access',
+rDesc:'Control this AC from anywhere over the internet using your personal link.',
+rLink:'Your personal link',copy:'Copy',copied:'Link copied.',
+rOn:'Connected to server',rOff:'Not connected',
+rWait:'Waiting for internet connection to set up remote access…',
 genset:'AutoGenset',
 gsDesc:"When the generator's Wi-Fi network appears (neighborhood genset switched on), the device automatically sends a command to the AC.",
 gsDis:'Disabled',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
@@ -199,6 +220,11 @@ recOvf:'الإشارة أطول من الذاكرة — حاول من مسافة
 queued:'تم إرسال الأمر.',
 schedules:'الجدولة',action:'الإجراء',at:'الوقت',days:'الأيام',add:'إضافة جدولة',
 none:'لا توجد جدولات بعد.',pickDay:'اختر يوماً واحداً على الأقل.',
+rTitle:'التحكم عن بُعد',
+rDesc:'تحكم بهذا المكيف من أي مكان عبر الإنترنت باستخدام رابطك الخاص.',
+rLink:'رابطك الخاص',copy:'نسخ',copied:'تم نسخ الرابط.',
+rOn:'متصل بالخادم',rOff:'غير متصل',
+rWait:'بانتظار الاتصال بالإنترنت لإعداد التحكم عن بُعد…',
 genset:'كشف المولّدة تلقائياً',
 gsDesc:'عند ظهور شبكة واي فاي المولّدة (تشغيل مولّدة الحي)، يرسل الجهاز أمراً للمكيف تلقائياً.',
 gsDis:'معطَّل',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
@@ -255,6 +281,13 @@ var g=ST.genset||{};
 $('gled').className='led'+(g.detected?' on':'');
 $('gdet').textContent=g.detected?t('gsDet'):t('gsNo');
 $('gdet').style.color=g.detected?'var(--ok)':'var(--mut)';
+var r=ST.remote||{};
+$('rled').className='led'+(r.mqtt?' on':'');
+$('rst').textContent=r.mqtt?t('rOn'):t('rOff');
+$('rst').style.color=r.mqtt?'var(--ok)':'var(--mut)';
+if(r.claimed&&r.link){$('rlinkbox').style.display='block';
+$('rwait').style.display='none';$('rlink').value=r.link}
+else{$('rlinkbox').style.display='none';$('rwait').style.display='block'}
 var sl=$('slist');sl.innerHTML='';var arr=ST.schedules||[];
 if(!arr.length){sl.innerHTML='<div class="empty">'+t('none')+'</div>';return}
 arr.forEach(function(s){var d=document.createElement('div');d.className='sched';
@@ -311,6 +344,11 @@ var m=document.querySelector('input[name="gs"]:checked').value;
 try{var r=await fetch('/api/genset',{method:'POST',body:JSON.stringify(
 {mode:m,delay:+$('g_delay').value,ssid:$('g_ssid').value||'GENSET_ACTIVE'})});
 toast(r.ok?t('saved'):t('err'));setTimeout(refresh,500)}catch(e){toast(t('err'))}}
+
+function copyLink(){var i=$('rlink');i.select();i.setSelectionRange(0,200);
+try{navigator.clipboard.writeText(i.value).then(function(){toast(t('copied'))},
+function(){document.execCommand('copy');toast(t('copied'))})}
+catch(e){document.execCommand('copy');toast(t('copied'))}}
 
 function manualBox(){$('manbox').style.display=$('tm_man').checked?'block':'none'}
 async function timeSave(){var body={ntp:$('tm_ntp').checked,tz:$('t_tz').value};

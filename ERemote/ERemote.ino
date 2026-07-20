@@ -2,7 +2,7 @@
    ERemote  --  smart scheduling IR remote for split ACs
    Target : WeMos/LOLIN D1 mini (ESP8266, clone OK)   |  Arduino IDE / arduino-cli
    FQBN   : esp8266:esp8266:d1_mini
-   Libs   : ArduinoJson (v7), IRremoteESP8266   (see install_libs.py)
+   Libs   : ArduinoJson (v7), IRremoteESP8266, PubSubClient
 
    Flow:
      - First boot  -> no /config.json -> serves the embedded SETUP WIZARD.
@@ -12,6 +12,12 @@
        (entered in the portal) for NTP time + internet.
      - Portal address on the AP: http://4.4.4.4  (chosen because it's short
        and easy to tell customers to type when the captive popup doesn't show).
+     - Remote access (IoT): once online, the device claims itself against the
+       central server (see server/ and ERemote/PROTOCOL.md), receives a
+       personal link https://<host>/r/<CODE>, then keeps an MQTT connection
+       to the server so the customer can control it from anywhere via that
+       link. Identity (secret + code) lives in EEPROM and survives factory
+       reset, so a device keeps the same link for life.
      - Records raw IR frames from the AC remote (reliable for AC protocols)
        and replays them on schedule or on demand.
 
@@ -23,9 +29,12 @@
 
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266HTTPClient.h>
 #include <DNSServer.h>
 #include <LittleFS.h>
+#include <EEPROM.h>
 #include <ArduinoJson.h>      // v7
+#include <PubSubClient.h>
 #include <IRrecv.h>
 #include <IRsend.h>
 #include <IRutils.h>
@@ -87,8 +96,18 @@ document.getElementById('ok').style.display='block';setTimeout(function(){locati
 #define IR_TX_PIN   D2        // GPIO4  -> transistor base
 #define IR_RX_PIN   D5        // GPIO14 -> VS1838B OUT
 
-const char*  AP_SSID      = "ERemote";     // open network, no password
+const char*  AP_SSID      = "ERemote";
+const char*  AP_PASS      = "44448888";    // WPA2; easy default, keeps neighbors out
 const uint8_t AP_CHANNEL  = 6;
+
+// ---- Remote access (cloud) ----
+// Your server: domain name or public IP of the VPS running server/app.js.
+// Used for the one-time claim call and as the default MQTT host.
+const char*    ER_HOST            = "SET-YOUR-DOMAIN-OR-IP";
+const uint16_t ER_MQTT_PORT       = 1883;
+const uint32_t CLAIM_RETRY_MS     = 60000;   // retry claim every minute until it works
+const uint32_t MQTT_RETRY_MS      = 30000;   // MQTT reconnect attempt interval
+const uint32_t STATE_HEARTBEAT_MS = 60000;   // republish state at least this often
 
 // ESP8266 has ONE radio => ONE TX power for both AP and STA (can't split them).
 // 0..20.5 dBm. Lower = shorter range for BOTH. 17 is a balanced default;
@@ -97,10 +116,11 @@ const float  WIFI_TX_POWER = 17.0;
 
 const uint32_t BOOT_GRACE_MS     = 8000;   // no *scheduled* send this soon after boot
 
-// Keep the AP alive this long after the router link comes up, then drop it
-// (STA stays; reach the portal via the router IP). AP returns if the link is lost.
-const uint32_t AP_HOLD_AFTER_STA = 180000UL;   // 3 min
-const bool     MANAGE_AP         = true;
+// AP lifecycle: MANAGE_AP=false keeps the hotspot (and http://4.4.4.4) up
+// forever, which is what customers are told to use. Set true to drop the AP
+// AP_HOLD_AFTER_STA ms after the router link comes up.
+const uint32_t AP_HOLD_AFTER_STA = 180000UL;   // 3 min (only if MANAGE_AP)
+const bool     MANAGE_AP         = false;
 
 const uint16_t RECORD_TIMEOUT_MS = 15000;
 
@@ -135,6 +155,24 @@ ESP8266WebServer server(80);
 DNSServer dnsServer;
 const byte DNS_PORT = 53;
 
+// Remote access (MQTT + claim)
+WiFiClient   mqttNet;
+PubSubClient mqtt(mqttNet);
+
+// Device identity, stored in EEPROM (its flash sector is separate from
+// LittleFS, so factory reset / double-reset wipes keep the same identity and
+// the customer's link never changes).
+const uint32_t ID_MAGIC = 0xE12E1D01;
+struct Identity {
+  uint32_t magic;
+  char     secret[33];   // 32 hex chars, generated on very first boot
+  char     code[8];      // 6-char access code assigned by the server
+  char     link[96];     // full customer link, e.g. https://host/r/CODE
+  char     host[48];     // MQTT host assigned by the server
+  uint8_t  claimed;
+} ident;
+String devId;            // "d" + chip id in hex; MQTT username + topic segment
+
 // Config held in RAM
 struct Config {
   String ssid, pass, tz = "Asia/Baghdad"; bool ntp = true;
@@ -166,10 +204,35 @@ bool     gsTriggered   = false;  // already fired for this appearance
 uint8_t  gsMiss        = 0;      // consecutive scans without the network
 uint32_t gsLastScanAt  = 0;
 
+// Remote access runtime state
+uint32_t lastClaimAt   = 0;
+uint32_t lastMqttTry   = 0;
+uint32_t lastStatePub  = 0;
+bool     statePubQueued= false;  // something changed -> publish state soon
+
 // Double-reset detector (RTC memory survives reset, not power loss)
 const uint32_t DRD_MAGIC   = 0xE12E0007;
 const uint32_t DRD_TIMEOUT = 5000;
 bool     drdCleared    = false;
+
+/* ------------------------------- identity ------------------------------- */
+void genSecret(char* out){                 // 32 hex chars + NUL
+  for(int i=0;i<4;i++){
+    uint32_t r = RANDOM_REG32 ^ micros() ^ (ESP.getChipId()<<i) ^ (ESP.getCycleCount()>>i);
+    snprintf(out+i*8, 9, "%08x", r);
+    delay(1);
+  }
+}
+void saveIdentity(){ EEPROM.put(0, ident); EEPROM.commit(); }
+void loadIdentity(){
+  EEPROM.get(0, ident);
+  if(ident.magic != ID_MAGIC){             // first boot ever: mint an identity
+    memset(&ident, 0, sizeof(ident));
+    ident.magic = ID_MAGIC;
+    genSecret(ident.secret);
+    saveIdentity();
+  }
+}
 
 /* ------------------------------- helpers -------------------------------- */
 bool validBtn(const String& b){ return b=="on"||b=="off"||b=="eco"; }
@@ -241,7 +304,7 @@ void startAP(){
   // browser when the automatic captive popup doesn't appear.
   IPAddress apIP(4,4,4,4);
   WiFi.softAPConfig(apIP, apIP, IPAddress(255,255,255,0));
-  WiFi.softAP(AP_SSID, nullptr, AP_CHANNEL);   // open network
+  WiFi.softAP(AP_SSID, AP_PASS, AP_CHANNEL);
   dnsServer.setTTL(0);                          // don't let phones cache answers
   dnsServer.start(DNS_PORT, "*", apIP);         // every hostname -> us
   apOn=true;
@@ -320,6 +383,11 @@ void handleStatus(){
   d["lastCapture"]["proto"]=lastCapProto;
   d["lastCapture"]["len"]=lastCapLen;
   d["lastCapture"]["overflow"]=lastCapOvf;
+
+  d["remote"]["claimed"]=(bool)ident.claimed;
+  d["remote"]["code"]=ident.code;
+  d["remote"]["link"]=ident.link;
+  d["remote"]["mqtt"]=mqtt.connected();
 
   JsonDocument sd; readSched(sd);
   d["schedules"]=sd.as<JsonArray>();
@@ -433,6 +501,7 @@ void captureIR(){
           saveIR(recordTarget,raw,len,proto); delete[] raw;
           lastCapBtn=recordTarget; lastCapProto=proto; lastCapLen=len; lastCapOvf=false;
           recordTarget="";
+          statePubQueued=true;                 // tell the server a code changed
         }
       }
     }
@@ -478,7 +547,7 @@ void gensetTask(){
     if(found){
       gsMiss=0;
       if(!gsPresent){                                // generator just came on
-        gsPresent=true;
+        gsPresent=true; statePubQueued=true;
         if(armed && !gsTriggered && LittleFS.exists(irPath(cfg.gsMode))){
           pendingSend=cfg.gsMode;
           sendAt=millis()+cfg.gsDelay*1000UL;
@@ -486,13 +555,93 @@ void gensetTask(){
         }
       }
     } else if(gsPresent && ++gsMiss>=2){             // gone for 2 scans -> re-arm
-      gsPresent=false; gsTriggered=false; gsMiss=0;
+      gsPresent=false; gsTriggered=false; gsMiss=0; statePubQueued=true;
     }
   } else if(n!=WIFI_SCAN_RUNNING &&
             millis()-gsLastScanAt>GS_SCAN_INTERVAL_MS){
     gsLastScanAt=millis();
     WiFi.scanNetworks(true, true);                   // async, include hidden
   }
+}
+
+/* --------------------------- remote access ------------------------------ */
+/* One-time claim: register this device with the central server and receive
+   the customer link + MQTT host. Plain HTTP on purpose: MQTT itself runs
+   without TLS in v1, so the device password crosses the wire on every MQTT
+   connect anyway — TLS on just the claim would add BearSSL's ~25 KB RAM
+   spike without a real security gain. The server refuses a known id with a
+   different secret, so the link can't be hijacked. */
+void claimTask(){
+  if(ident.claimed || WiFi.status()!=WL_CONNECTED) return;
+  if(lastClaimAt && millis()-lastClaimAt<CLAIM_RETRY_MS) return;
+  lastClaimAt=millis();
+
+  WiFiClient net; HTTPClient http;
+  http.setTimeout(8000);
+  if(!http.begin(net, String("http://")+ER_HOST+"/api/claim")) return;
+  http.addHeader("Content-Type","application/json");
+  JsonDocument d; d["id"]=devId; d["secret"]=ident.secret; d["fw"]="1.0";
+  String body; serializeJson(d,body);
+  int rc=http.POST(body);
+  if(rc==200){
+    JsonDocument r;
+    if(deserializeJson(r,http.getString())==DeserializationError::Ok && (r["ok"]|false)){
+      strlcpy(ident.code, (const char*)(r["code"]|""),         sizeof(ident.code));
+      strlcpy(ident.link, (const char*)(r["link"]|""),         sizeof(ident.link));
+      strlcpy(ident.host, (const char*)(r["mqtt"]["host"]|ER_HOST), sizeof(ident.host));
+      if(ident.code[0]){ ident.claimed=1; saveIdentity(); }
+    }
+  }
+  http.end();
+}
+
+String stateTopic(){ return "er/"+devId+"/state"; }
+String cmdTopic()  { return "er/"+devId+"/cmd";  }
+
+void mqttCallback(char* topic, byte* payload, unsigned int len){
+  (void)topic;
+  String p; p.reserve(len);
+  for(unsigned int i=0;i<len;i++) p+=(char)payload[i];
+  String b=p;
+  if(p.indexOf('{')>=0){ JsonDocument d; if(!deserializeJson(d,p)) b=(const char*)(d["btn"]|""); }
+  b.trim();
+  if(validBtn(b) && LittleFS.exists(irPath(b))){
+    pendingSend=b; sendAt=millis();
+    statePubQueued=true;
+  }
+}
+
+void publishState(){
+  if(!mqtt.connected()) return;
+  JsonDocument d;
+  d["online"]=true;
+  d["codes"]["on"] =LittleFS.exists(irPath("on"));
+  d["codes"]["off"]=LittleFS.exists(irPath("off"));
+  d["codes"]["eco"]=LittleFS.exists(irPath("eco"));
+  d["genset"]=gsPresent;
+  d["rssi"]=WiFi.RSSI();
+  String out; serializeJson(d,out);
+  mqtt.publish(stateTopic().c_str(), out.c_str(), true);   // retained
+  lastStatePub=millis(); statePubQueued=false;
+}
+
+void mqttTask(){
+  if(!ident.claimed || WiFi.status()!=WL_CONNECTED) return;
+  if(!mqtt.connected()){
+    if(lastMqttTry && millis()-lastMqttTry<MQTT_RETRY_MS) return;
+    lastMqttTry=millis();
+    mqtt.setServer(ident.host[0] ? ident.host : ER_HOST, ER_MQTT_PORT);
+    mqtt.setCallback(mqttCallback);
+    // LWT: broker marks us offline (retained) if the link dies.
+    if(mqtt.connect(devId.c_str(), devId.c_str(), ident.secret,
+                    stateTopic().c_str(), 0, true, "{\"online\":false}")){
+      mqtt.subscribe(cmdTopic().c_str());
+      publishState();
+    }
+    return;
+  }
+  mqtt.loop();
+  if(statePubQueued || millis()-lastStatePub>STATE_HEARTBEAT_MS) publishState();
 }
 
 /* --------------------------------- DRD ---------------------------------- */
@@ -515,6 +664,11 @@ void setup(){
   if(!LittleFS.begin()){ LittleFS.format(); LittleFS.begin(); }
   handleDRD();               // may format on double-tap RST
   loadConfig();              // sets provisioned + cfg
+
+  EEPROM.begin(sizeof(Identity));
+  loadIdentity();            // mints the device secret on very first boot
+  devId = "d" + String(ESP.getChipId(), HEX);
+  mqtt.setBufferSize(512);
 
   WiFi.persistent(false);
   WiFi.mode(WIFI_AP_STA);
@@ -568,5 +722,7 @@ void loop(){
   manageAP();
   checkSchedules();
   gensetTask();
+  claimTask();
+  mqttTask();
   clearDRD();
 }
