@@ -1,0 +1,101 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ERemote — جهاز التحكم الذكي بالمكيفات</title><style>
+:root{--b:#0f766e;--b2:#0ea5a4;--bg:#0b1220;--card:#131c2b;--line:#243244;
+--txt:#f2f6fb;--mut:#b3c0d4;--ok:#86efac;--bad:#fca5a5}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Tahoma,sans-serif;
+font-size:17px;background:var(--bg);color:var(--txt);min-height:100vh}
+.wrap{max-width:520px;margin:0 auto;padding:16px 16px 48px}
+.banner{background:linear-gradient(135deg,var(--b),var(--b2));border-radius:0 0 22px 22px;
+padding:34px 20px 30px;text-align:center;color:#fff}
+.banner .logo{width:64px;height:64px;border-radius:18px;margin:0 auto 12px;
+background:rgba(255,255,255,.15);display:grid;place-items:center}
+.banner .logo svg{width:36px;height:36px}
+.banner h1{margin:0;font-size:28px;font-weight:800}
+.banner p{margin:8px 0 0;font-size:16.5px;opacity:.92}
+section{background:var(--card);border:1px solid var(--line);border-radius:18px;
+padding:20px;margin-top:16px}
+h2{font-size:19px;margin:0 0 12px}
+label{display:block;font-size:14px;color:var(--mut);margin-bottom:6px}
+.row{display:flex;gap:10px}
+input{flex:1;min-width:0;padding:14px;border:1px solid var(--line);border-radius:12px;
+background:var(--bg);color:var(--txt);font-size:19px;font-family:inherit;
+direction:ltr;text-align:center;letter-spacing:.2em;text-transform:uppercase}
+button{border:0;border-radius:12px;padding:14px 22px;font-size:17px;font-weight:700;
+color:#fff;background:var(--b);cursor:pointer;font-family:inherit;flex:none}
+button:disabled{opacity:.6}
+.err{color:var(--bad);font-size:15px;margin:10px 0 0;min-height:1.3em}
+.feat{display:flex;gap:14px;align-items:flex-start;padding:12px 0;
+border-bottom:1px solid var(--line)}
+.feat:last-child{border-bottom:0}
+.feat .ic{font-size:26px;flex:none;width:38px;text-align:center}
+.feat b{display:block;font-size:16.5px;margin-bottom:3px}
+.feat span{color:var(--mut);font-size:15px;line-height:1.7}
+footer{text-align:center;color:var(--mut);font-size:13.5px;margin-top:22px}
+</style></head><body>
+
+<div class="banner">
+  <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+  stroke-linecap="round"><path d="M4 6h16v9H4z"/><path d="M8 19h8M12 15v4"/>
+  <circle cx="8" cy="10.5" r="1"/><path d="M12 9v3M16 9v3"/></svg></div>
+  <h1>خادم ERemote</h1>
+  <p>جهاز التحكم الذكي القابل للبرمجة بالمكيفات</p>
+</div>
+
+<div class="wrap">
+
+<section>
+  <h2>الدخول إلى جهازك</h2>
+  <label>أدخل رمز جهازك المكوَّن من ٦ رموز</label>
+  <form class="row" onsubmit="return go(event)">
+    <input id="code" maxlength="6" autocomplete="off" placeholder="AB2CD3">
+    <button id="btn" type="submit">دخول</button>
+  </form>
+  <div class="err" id="err"></div>
+</section>
+
+<section>
+  <h2>ماذا يفعل ERemote؟</h2>
+  <div class="feat"><div class="ic">🌐</div><div>
+    <b>تحكم من أي مكان</b>
+    <span>شغّل أو أطفئ مكيفك عبر الإنترنت من العمل أو السيارة — برابطك الخاص، بدون تطبيقات.</span>
+  </div></div>
+  <div class="feat"><div class="ic">⚡</div><div>
+    <b>كشف المولّدة تلقائياً</b>
+    <span>عند تشغيل مولّدة الحي، يحوِّل الجهاز مكيفك تلقائياً إلى الوضع الاقتصادي أو يطفئه — يحمي المولّدة ويوفّر الأمبيرات.</span>
+  </div></div>
+  <div class="feat"><div class="ic">⏰</div><div>
+    <b>جدولة أسبوعية</b>
+    <span>برمج أوقات التشغيل والإطفاء لكل يوم من أيام الأسبوع — يبرد البيت قبل وصولك وينطفئ وحده.</span>
+  </div></div>
+  <div class="feat"><div class="ic">📡</div><div>
+    <b>يعمل مع جميع المكيفات</b>
+    <span>يتعلّم أزرار ريموتك الأصلي مباشرة (Gree، Midea، Tossot وغيرها) — بدون أكواد معقدة.</span>
+  </div></div>
+  <div class="feat"><div class="ic">🛠️</div><div>
+    <b>إعداد سهل خطوة بخطوة</b>
+    <span>معالج إعداد بالعربية يرشدك: سجّل الأزرار، اربط الواي فاي، وانتهيت خلال دقيقتين.</span>
+  </div></div>
+  <div class="feat"><div class="ic">💰</div><div>
+    <b>توفير الطاقة والجهد</b>
+    <span>لا مزيد من مكيف يعمل طوال اليوم بلا داعٍ — راحة أكثر، فاتورة أقل، وعمر أطول لمكيفك.</span>
+  </div></div>
+</section>
+
+<footer>ERemote © 2026</footer>
+</div>
+
+<script>
+async function go(e){e.preventDefault();
+var c=document.getElementById('code').value.trim().toUpperCase();
+var err=document.getElementById('err'),btn=document.getElementById('btn');
+err.textContent='';
+if(c.length!==6){err.textContent='الرمز مكوَّن من ٦ رموز.';return false}
+btn.disabled=true;
+try{var r=await fetch('/api/r/'+encodeURIComponent(c)+'/state');
+if(r.ok){location.href='/r/'+c;return false}
+err.textContent=r.status===429?'محاولات كثيرة — انتظر دقيقة ثم حاول.':'404 — الرمز غير صحيح.';
+}catch(x){err.textContent='تعذّر الاتصال بالخادم.'}
+btn.disabled=false;return false}
+</script></body></html>

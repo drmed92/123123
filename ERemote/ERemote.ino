@@ -56,7 +56,7 @@ const uint8_t AP_CHANNEL  = 6;
 // ---- Remote access (cloud) ----
 // Your server: domain name or public IP of the VPS running server/app.js.
 // Used for the one-time claim call and as the default MQTT host.
-const char*    ER_HOST            = "SET-YOUR-DOMAIN-OR-IP";
+const char*    ER_HOST            = "er.my.to";
 const uint16_t ER_HTTP_PORT       = 80;      // claim endpoint port on ER_HOST
 const uint16_t ER_MQTT_PORT       = 1883;
 const uint32_t CLAIM_RETRY_MS     = 60000;   // retry claim every minute until it works
@@ -76,12 +76,16 @@ const uint32_t BOOT_GRACE_MS     = 8000;   // no *scheduled* send this soon afte
 const uint32_t AP_HOLD_AFTER_STA = 180000UL;   // 3 min (only if MANAGE_AP)
 const bool     MANAGE_AP         = false;
 
-const uint16_t RECORD_TIMEOUT_MS = 15000;
+const uint16_t RECORD_TIMEOUT_MS = 30000;  // matches the wizard's visible countdown
 
-// AutoGenset: how often to scan for the generator's Wi-Fi network. Each scan
-// makes the radio hop channels for ~2 s, briefly stalling AP/STA traffic, so
-// don't go much lower than this.
-const uint32_t GS_SCAN_INTERVAL_MS = 30000;
+// AutoGenset scanning: a fast single-channel, SSID-filtered probe (~120 ms of
+// radio) runs every GS_FAST_INTERVAL_MS, so generator detection reacts within
+// ~5 s without disturbing the AP/STA link. Full all-channel sweeps (~2 s) run
+// only for the Wi-Fi pickers (/api/scan) or, while the generator is absent,
+// every GS_FULL_FALLBACK_MS as a safety net to re-learn the emitter's channel
+// (persisted as cfg.gsChannel, learned automatically from full sweeps).
+const uint32_t GS_FAST_INTERVAL_MS = 5000;
+const uint32_t GS_FULL_FALLBACK_MS = 300000;
 /* ------------------------------------------------------------------------- */
 
 // IR capture. (IRremoteESP8266 equivalents of Arduino-IRremote's
@@ -133,6 +137,7 @@ struct Config {
   // AutoGenset: when a network named gsSsid appears, send gsMode's IR code
   // ("off"/"eco") after gsDelay seconds; "disabled" turns the feature off.
   String gsMode = "disabled", gsSsid = "GENSET_ACTIVE"; uint16_t gsDelay = 3;
+  uint8_t gsChannel = 6;   // emitter's Wi-Fi channel; auto-learned from full sweeps
 } cfg;
 
 // Runtime state
@@ -141,6 +146,7 @@ bool     timeValid     = false;
 bool     apOn          = true;
 uint32_t bootMillis    = 0;
 uint32_t staConnectedAt= 0;
+uint32_t staBeginAt    = 0;      // last WiFi.begin(); scans pause while associating
 int      lastSchedKey  = -1;
 
 String   recordTarget  = "";     // "on"/"off"/"eco" while capturing
@@ -162,11 +168,15 @@ uint32_t gsLastScanAt  = 0;
 // the /api/scan network list used by the wizard and portal.
 String   scanJson      = "[]";   // [{"n":ssid,"db":rssi,"sec":bool},...]
 uint32_t scanDoneAt    = 0;
-bool     scanWanted    = false;  // a client asked for a fresh list
+bool     scanWanted    = false;  // a client asked for a fresh full list
+bool     scanFull      = false;  // scan in flight is a full sweep (vs fast probe)
+uint32_t lastFullScanAt= 0;
 
 // Remote access runtime state
 uint32_t lastClaimAt   = 0;
 int      lastClaimRc   = 0;      // 0=never tried; >0 HTTP status; <0 connection error
+uint8_t  claimTries    = 0;      // first 3 attempts retry every 10 s, then 60 s
+bool     prevWifiConn  = false;
 uint32_t lastMqttTry   = 0;
 uint32_t lastStatePub  = 0;
 bool     statePubQueued= false;  // something changed -> publish state soon
@@ -215,6 +225,7 @@ void saveConfig(){
   JsonDocument d;
   d["ssid"]=cfg.ssid; d["pass"]=cfg.pass; d["tz"]=cfg.tz; d["ntp"]=cfg.ntp;
   d["gsMode"]=cfg.gsMode; d["gsSsid"]=cfg.gsSsid; d["gsDelay"]=cfg.gsDelay;
+  d["gsChannel"]=cfg.gsChannel;
   File f=LittleFS.open("/config.json","w"); if(f){ serializeJson(d,f); f.close(); }
 }
 void loadConfig(){
@@ -222,6 +233,7 @@ void loadConfig(){
   JsonDocument d; if(deserializeJson(d,f)==DeserializationError::Ok){
     cfg.ssid=d["ssid"]|""; cfg.pass=d["pass"]|""; cfg.tz=d["tz"]|"Asia/Baghdad"; cfg.ntp=d["ntp"]|true;
     cfg.gsMode=d["gsMode"]|"disabled"; cfg.gsSsid=d["gsSsid"]|"GENSET_ACTIVE"; cfg.gsDelay=d["gsDelay"]|3;
+    cfg.gsChannel=d["gsChannel"]|6;
     provisioned=true;
   }
   f.close();
@@ -271,7 +283,10 @@ void startAP(){
   apOn=true;
 }
 void connectSTA(){
-  if(cfg.ssid.length()){ WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str()); staConnectedAt=0; }
+  if(cfg.ssid.length()){
+    WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());
+    staConnectedAt=0; staBeginAt=millis();
+  }
 }
 void manageAP(){
   if(!MANAGE_AP) return;
@@ -530,35 +545,64 @@ void gensetSeen(bool found){
 }
 
 void scanTask(){
-  // Single owner of the Wi-Fi scanner: feeds the genset detector and the
-  // /api/scan network list (wizard + portal Wi-Fi pickers).
+  // Single owner of the Wi-Fi scanner. Two scan types:
+  //  - fast probe: async, single channel (cfg.gsChannel), filtered to the
+  //    genset SSID; ~120 ms of radio, runs every GS_FAST_INTERVAL_MS.
+  //  - full sweep: all channels, feeds the /api/scan picker list AND learns
+  //    the emitter's channel; run on demand or as a rare absence fallback.
   int n=WiFi.scanComplete();
   if(n>=0){                                          // a scan just finished
     bool found=false;
-    JsonDocument d; JsonArray a=d.to<JsonArray>();
-    for(int i=0;i<n;i++){
-      String ss=WiFi.SSID(i);
-      if(ss==cfg.gsSsid) found=true;
-      if(!ss.length()) continue;                     // hidden networks
-      bool dup=false;
-      for(JsonObject o:a) if(ss==(const char*)o["n"]){
-        dup=true;
-        if((int)o["db"]<WiFi.RSSI(i)) o["db"]=WiFi.RSSI(i);
-        break;
+    if(scanFull){
+      JsonDocument d; JsonArray a=d.to<JsonArray>();
+      for(int i=0;i<n;i++){
+        String ss=WiFi.SSID(i);
+        if(ss==cfg.gsSsid){
+          found=true;
+          uint8_t ch=WiFi.channel(i);                // auto-learn emitter channel
+          if(ch && ch!=cfg.gsChannel){ cfg.gsChannel=ch; saveConfig(); }
+        }
+        if(!ss.length()) continue;                   // hidden networks
+        bool dup=false;
+        for(JsonObject o:a) if(ss==(const char*)o["n"]){
+          dup=true;
+          if((int)o["db"]<WiFi.RSSI(i)) o["db"]=WiFi.RSSI(i);
+          break;
+        }
+        if(dup || a.size()>=30) continue;
+        JsonObject o=a.add<JsonObject>();
+        o["n"]=ss; o["db"]=WiFi.RSSI(i);
+        o["sec"]=(WiFi.encryptionType(i)!=ENC_TYPE_NONE);
       }
-      if(dup || a.size()>=15) continue;
-      JsonObject o=a.add<JsonObject>();
-      o["n"]=ss; o["db"]=WiFi.RSSI(i);
-      o["sec"]=(WiFi.encryptionType(i)!=ENC_TYPE_NONE);
+      scanJson=""; serializeJson(d,scanJson);
+      scanDoneAt=millis(); scanWanted=false; lastFullScanAt=millis();
+    } else {
+      for(int i=0;i<n;i++) if(WiFi.SSID(i)==cfg.gsSsid){ found=true; break; }
     }
-    scanJson=""; serializeJson(d,scanJson);
-    scanDoneAt=millis(); scanWanted=false;
     WiFi.scanDelete();
     gensetSeen(found);
-  } else if(n!=WIFI_SCAN_RUNNING &&
-            (scanWanted || millis()-gsLastScanAt>GS_SCAN_INTERVAL_MS)){
-    gsLastScanAt=millis();
-    WiFi.scanNetworks(true, true);                   // async, include hidden
+    return;
+  }
+  if(n==WIFI_SCAN_RUNNING) return;
+
+  bool associating = cfg.ssid.length() && WiFi.status()!=WL_CONNECTED &&
+                     staBeginAt && millis()-staBeginAt<25000;
+
+  // Full sweeps hop all channels for ~2 s, so never during association.
+  if(scanWanted && !associating){
+    scanFull=true; gsLastScanAt=millis();
+    WiFi.scanNetworks(true, true);
+    return;
+  }
+  if(millis()-gsLastScanAt<GS_FAST_INTERVAL_MS) return;
+  gsLastScanAt=millis();
+  if(!gsPresent && !associating &&
+     millis()-lastFullScanAt>GS_FULL_FALLBACK_MS){
+    scanFull=true;                                   // re-learn channel safety net
+    WiFi.scanNetworks(true, true);
+  } else {
+    scanFull=false;                                  // 120 ms probe, always safe
+    WiFi.scanNetworks(true, false, cfg.gsChannel, (uint8_t*)cfg.gsSsid.c_str());
   }
 }
 
@@ -570,9 +614,14 @@ void scanTask(){
    spike without a real security gain. The server refuses a known id with a
    different secret, so the link can't be hijacked. */
 void claimTask(){
-  if(ident.claimed || WiFi.status()!=WL_CONNECTED) return;
-  if(lastClaimAt && millis()-lastClaimAt<CLAIM_RETRY_MS) return;
-  lastClaimAt=millis();
+  bool conn = WiFi.status()==WL_CONNECTED;
+  if(conn && !prevWifiConn){ lastClaimAt=0; claimTries=0; }  // claim right away
+  prevWifiConn=conn;
+  if(ident.claimed || !conn) return;
+  // Quick retries first (server hiccup, DNS warm-up), then back off.
+  uint32_t interval = (claimTries<3) ? 10000 : CLAIM_RETRY_MS;
+  if(lastClaimAt && millis()-lastClaimAt<interval) return;
+  lastClaimAt=millis(); claimTries++;
 
   WiFiClient net; HTTPClient http;
   http.setTimeout(8000);
@@ -675,6 +724,20 @@ void setup(){
   WiFi.hostname("ERemote");
   WiFi.setOutputPower(WIFI_TX_POWER);   // single radio: applies to AP and STA
   startAP();                 // also starts the captive-portal DNS hijack
+
+  // Fast-boot genset check: one short blocking probe (~150 ms) BEFORE the
+  // router association starts, so a device powering up on generator supply
+  // queues its OFF/ECO command within seconds of getting power.
+  {
+    int bn=WiFi.scanNetworks(false, false, cfg.gsChannel,
+                             (uint8_t*)cfg.gsSsid.c_str());
+    bool bfound=false;
+    for(int i=0;i<bn;i++) if(WiFi.SSID(i)==cfg.gsSsid){ bfound=true; break; }
+    WiFi.scanDelete();
+    if(bfound) gensetSeen(true);
+    gsLastScanAt=millis();
+  }
+
   connectSTA();
 
   irsend.begin();

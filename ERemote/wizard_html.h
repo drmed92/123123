@@ -12,10 +12,10 @@ const char SETUP_HTML[] PROGMEM = R"WIZ(
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ERemote Setup</title><style>
 :root{--b:#0f766e;--b2:#0ea5a4;--bg:#0b1220;--card:#131c2b;--line:#243244;
---txt:#e6edf5;--mut:#93a1b5;--ok:#86efac;--bad:#fca5a5;--warn:#fcd34d}
+--txt:#f2f6fb;--mut:#b3c0d4;--ok:#86efac;--bad:#fca5a5;--warn:#fcd34d}
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Tahoma,sans-serif;
-background:var(--bg);color:var(--txt);min-height:100vh;padding:16px;
+font-size:17px;background:var(--bg);color:var(--txt);min-height:100vh;padding:16px;
 display:flex;justify-content:center;align-items:flex-start}
 .card{max-width:420px;width:100%;background:var(--card);border:1px solid var(--line);
 border-radius:20px;padding:24px;margin-top:12px;box-shadow:0 10px 30px rgba(0,0,0,.4);
@@ -27,20 +27,20 @@ cursor:pointer;font-family:inherit;display:none}
 .dot{width:9px;height:9px;border-radius:50%;background:#28374b}
 .dot.act{background:var(--b2);box-shadow:0 0 8px rgba(14,165,164,.7)}
 .dot.done{background:#3d6b52}
-h1{font-size:20px;margin:0 0 8px;text-align:center}
-p{color:var(--mut);font-size:14px;line-height:1.7;margin:0 0 16px;text-align:center}
+h1{font-size:24px;margin:0 0 10px;text-align:center}
+p{color:var(--mut);font-size:16.5px;line-height:1.8;margin:0 0 16px;text-align:center}
 .logo{width:56px;height:56px;border-radius:16px;margin:4px auto 14px;
 background:linear-gradient(135deg,var(--b),var(--b2));display:grid;place-items:center}
 .logo svg{width:30px;height:30px;color:#fff}
-button{border:0;border-radius:14px;padding:14px;font-size:15px;font-weight:700;
+button{border:0;border-radius:14px;padding:15px;font-size:17px;font-weight:700;
 color:#fff;background:var(--b);cursor:pointer;font-family:inherit}
 button:disabled{opacity:.5}
 .pri{width:100%;margin-top:6px}
 .sec{width:100%;margin-top:10px;background:var(--line)}
 .ghost{display:block;width:100%;background:none;color:var(--mut);font-weight:600;
-font-size:13px;margin-top:12px;text-decoration:underline;padding:8px}
+font-size:15px;margin-top:12px;text-decoration:underline;padding:8px}
 .big2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
-.big2 button{padding:18px 0;font-size:17px}
+.big2 button{padding:19px 0;font-size:19px}
 .pulse{width:78px;height:78px;border-radius:50%;margin:20px auto;position:relative;
 background:#0e2233;display:grid;place-items:center;font-size:30px}
 .pulse::after{content:'';position:absolute;inset:0;border-radius:50%;
@@ -48,24 +48,29 @@ border:2px solid var(--b2);animation:pw 1.5s ease-out infinite}
 @keyframes pw{0%{transform:scale(.75);opacity:1}100%{transform:scale(1.55);opacity:0}}
 .okmark{width:78px;height:78px;border-radius:50%;margin:20px auto;background:#123527;
 display:grid;place-items:center;font-size:36px;color:var(--ok)}
-.st{text-align:center;font-size:14px;min-height:1.4em;margin:4px 0 10px}
+.st{text-align:center;font-size:16.5px;min-height:1.4em;margin:4px 0 10px}
 .st.ok{color:var(--ok)}.st.bad{color:var(--bad)}.st.warn{color:var(--warn)}
-input,select{width:100%;padding:12px;margin:6px 0 10px;border:1px solid var(--line);
-border-radius:10px;background:var(--bg);color:var(--txt);font-size:15px;font-family:inherit}
-label{display:block;font-size:12px;color:var(--mut)}
+.count{text-align:center;font-size:34px;font-weight:800;color:var(--b2);
+margin:2px 0 8px;font-variant-numeric:tabular-nums}
+input,select{width:100%;padding:13px;margin:6px 0 10px;border:1px solid var(--line);
+border-radius:10px;background:var(--bg);color:var(--txt);font-size:17px;font-family:inherit}
+label{display:block;font-size:14px;color:var(--mut)}
 .netlist{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:6px 0}
 .net{display:flex;justify-content:space-between;align-items:center;gap:10px;
-padding:13px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:15px}
+padding:15px 13px;border-bottom:1px solid var(--line);cursor:pointer;font-size:17px}
 .net:last-child{border-bottom:0}
 .net:active{background:#1a2534}
 .net .m{color:var(--mut);font-size:13px;direction:ltr;flex:none}
-.radio{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:15px}
-.radio input{width:auto;margin:0}
-.sum{font-size:14px;line-height:2;margin:0 0 14px}
+.radio{display:flex;align-items:center;gap:9px;margin:12px 0;font-size:17px}
+.radio input{width:auto;margin:0;transform:scale(1.25)}
+.sum{font-size:16px;line-height:2.1;margin:0 0 14px}
 .sum b{color:var(--ok)}
 .spin{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--b2);
 border-radius:50%;margin:14px auto;animation:sp 1s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
+.linkrow{display:flex;gap:8px;margin:4px 0 10px}
+.linkrow input{direction:ltr;text-align:left;font-size:15px;margin:0}
+.linkrow button{flex:none;background:var(--line)}
 </style></head><body>
 <div class="card">
   <button class="lang" id="langbtn" onclick="setLang(L=='en'?'ar':'en',true)">EN</button>
@@ -111,6 +116,8 @@ en:{
  dOn:'ON button',dOff:'OFF button',dEco:'ECO button',dWifi:'Wi-Fi',dGen:'Generator',
  done:'recorded',skipped:'skipped',connected:'connected',enabled:'enabled',disabled:'off',
  dNote:'Your personal internet control link will appear on the main page once the device connects to the server.',
+ dLink:'Your internet control link — save it and open it from anywhere:',
+ copy:'Copy',copied:'Link copied.',
  open:'Open control panel',
  delayS:['3 seconds','5 seconds','10 seconds','15 seconds','30 seconds','1 minute','2 minutes','5 minutes']},
 ar:{
@@ -150,6 +157,8 @@ ar:{
  dOn:'زر التشغيل',dOff:'زر الإطفاء',dEco:'الزر الاقتصادي',dWifi:'الواي فاي',dGen:'المولّدة',
  done:'مسجَّل',skipped:'تم تخطيه',connected:'متصل',enabled:'مفعَّل',disabled:'معطَّل',
  dNote:'رابط التحكم عبر الإنترنت الخاص بك سيظهر في الصفحة الرئيسية بعد اتصال الجهاز بالخادم.',
+ dLink:'رابط التحكم عبر الإنترنت الخاص بك — احفظه وافتحه من أي مكان:',
+ copy:'نسخ',copied:'تم نسخ الرابط.',
  open:'فتح لوحة التحكم',
  delayS:['٣ ثوانٍ','٥ ثوانٍ','١٠ ثوانٍ','١٥ ثانية','٣٠ ثانية','دقيقة واحدة','دقيقتان','٥ دقائق']}};
 var DELAYS=[3,5,10,15,30,60,120,300];
@@ -198,13 +207,16 @@ if(codeSet(b)){renderRecDone(b,true);return}
 startRec(b)}
 function startRec(b){
 h(recHdr(b)+'<p>'+t('recHow').replace('{B}',t('bn_'+b))+'</p>'+
-'<div class="pulse">⚫</div><div class="st" id="rst">'+t('listening')+'</div>'+
+'<div class="pulse">⚫</div><div class="count" id="cnt">30</div>'+
+'<div class="st" id="rst">'+t('listening')+'</div>'+
 (b=='eco'?'<button class="ghost" onclick="ecoSkipped=true;go(nextOf(\'eco\'))">'+t('skipEco')+'</button>':''));
 fetch('/api/record?btn='+b,{method:'POST'}).catch(function(){});
 var n=0;
-every(1000,async function(){n++;await getStatus();
+every(1000,async function(){n++;
+var c=$('cnt');if(c)c.textContent=Math.max(0,30-n);
+await getStatus();
 if(codeSet(b)){clearTimers();renderRecDone(b,false);return}
-if(n>=16){clearTimers();
+if(n>=30){clearTimers();
 var lc=ST&&ST.lastCapture,ovf=lc&&lc.btn==b&&lc.overflow;
 h(recHdr(b)+'<div class="okmark" style="background:#3a1d1d;color:var(--bad)">✗</div>'+
 '<div class="st bad">'+(ovf?t('recOvf'):t('recFail'))+'</div>'+
@@ -280,7 +292,7 @@ h('<h1>'+t('fTitle')+'</h1><p style="color:var(--warn)">'+t('skipWarn')+'</p>'+
 
 /* ---------- genset step ---------- */
 function showGenset(){dots(4);
-h('<h1>'+t('gTitle')+'</h1><p>'+t('gQ')+'</p><p style="font-size:12px">'+t('gNote')+'</p>'+
+h('<h1>'+t('gTitle')+'</h1><p>'+t('gQ')+'</p><p style="font-size:14px">'+t('gNote')+'</p>'+
 '<div class="big2"><button onclick="gensetYes()">'+t('yes')+'</button>'+
 '<button class="sec" style="margin:0" onclick="gensetNo()">'+t('no')+'</button></div>')}
 async function gensetNo(){gsChoice='disabled';
@@ -314,16 +326,34 @@ go('done')}
 async function showDone(){dots(5);
 try{await fetch('/api/init',{method:'POST'})}catch(e){}
 await getStatus();
+renderDoneCard();
+// The claim can take a few more seconds after Wi-Fi came up; keep polling
+// and swap the generic note for the real link the moment it exists.
+if(!(ST&&ST.remote&&ST.remote.claimed)){var n=0;
+every(3000,async function(){n++;await getStatus();
+if(ST&&ST.remote&&ST.remote.claimed){clearTimers();renderDoneCard()}
+else if(n>=30)clearTimers()})}}
+function renderDoneCard(){
 var row=function(name,ok,okTxt,noTxt){
 return name+': <b'+(ok?'':' style="color:var(--mut)"')+'>'+(ok?okTxt:noTxt)+'</b><br>'};
+var r=(ST&&ST.remote)||{};
+var linkPart=(r.claimed&&r.link)
+?'<p style="margin-bottom:6px">'+t('dLink')+'</p>'+
+ '<div class="linkrow"><input id="wlink" readonly value="'+r.link+'">'+
+ '<button onclick="copyWLink()">'+t('copy')+'</button></div>'
+:'<p>'+t('dNote')+'</p>';
 h('<h1>'+t('dTitle')+'</h1><div class="okmark">✓</div><p class="sum" style="text-align:center">'+
 row(t('dOn'),codeSet('on'),t('done'),t('skipped'))+
 row(t('dOff'),codeSet('off'),t('done'),t('skipped'))+
 row(t('dEco'),codeSet('eco'),t('done'),t('skipped'))+
 row(t('dWifi'),ST&&ST.wifi&&ST.wifi.connected,t('connected'),t('skipped'))+
 row(t('dGen'),gsChoice&&gsChoice!='disabled',t('enabled'),t('disabled'))+
-'</p><p>'+t('dNote')+'</p>'+
+'</p>'+linkPart+
 '<button class="pri" onclick="location.href=\'/\'">'+t('open')+'</button>')}
+function copyWLink(){var i=$('wlink');i.select();i.setSelectionRange(0,200);
+try{navigator.clipboard.writeText(i.value).then(function(){},function(){document.execCommand('copy')})}
+catch(e){document.execCommand('copy')}
+var b=document.querySelector('.linkrow button');if(b)b.textContent=t('copied')}
 
 /* ---------- boot ---------- */
 (async function(){

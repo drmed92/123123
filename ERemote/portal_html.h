@@ -9,58 +9,58 @@ const char PORTAL_HTML[] PROGMEM = R"PORTAL(
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ERemote</title><style>
 :root{--b:#0f766e;--b2:#0ea5a4;--bg:#0b1220;--card:#131c2b;--line:#243244;
---txt:#e6edf5;--mut:#93a1b5;--ok:#86efac;--bad:#fca5a5;--warn:#fcd34d}
+--txt:#f2f6fb;--mut:#b3c0d4;--ok:#86efac;--bad:#fca5a5;--warn:#fcd34d}
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Tahoma,sans-serif;
-background:var(--bg);color:var(--txt);min-height:100vh;padding:16px 16px 40px}
+font-size:16px;background:var(--bg);color:var(--txt);min-height:100vh;padding:16px 16px 40px}
 .wrap{max-width:440px;margin:0 auto}
 header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
 .logo{width:40px;height:40px;border-radius:12px;flex:none;
 background:linear-gradient(135deg,var(--b),var(--b2));display:grid;place-items:center}
 .logo svg{width:22px;height:22px;color:#fff}
 header h1{font-size:18px;margin:0;flex:1}
-#clock{font-size:12px;color:var(--mut)}
-.lang{padding:6px 14px;font-size:13px;font-weight:600;background:var(--line);
+#clock{font-size:13px;color:var(--mut)}
+.lang{padding:7px 15px;font-size:14px;font-weight:600;background:var(--line);
 border:0;border-radius:10px;color:var(--txt);cursor:pointer;font-family:inherit}
 section{background:var(--card);border:1px solid var(--line);border-radius:16px;
 padding:16px;margin-bottom:14px}
-h2{font-size:14px;margin:0 0 12px;color:var(--mut);font-weight:600;
+h2{font-size:15px;margin:0 0 12px;color:var(--mut);font-weight:600;
 text-transform:uppercase;letter-spacing:.04em}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px;
 padding:10px 0;border-top:1px solid var(--line)}
 .row:first-of-type{border-top:0}
-.bt{font-weight:700;font-size:15px}
-.st{font-size:12px;color:var(--mut)}
+.bt{font-weight:700;font-size:17px}
+.st{font-size:13.5px;color:var(--mut)}
 .st.on{color:var(--ok)}
 .acts{display:flex;gap:8px;flex:none}
-button{border:0;border-radius:12px;padding:10px 16px;font-size:14px;font-weight:700;
+button{border:0;border-radius:12px;padding:11px 17px;font-size:16px;font-weight:700;
 color:#fff;background:var(--b);cursor:pointer;font-family:inherit}
 button.sec{background:var(--line)}
 button.danger{background:#7f1d1d;width:100%}
 button:disabled{opacity:.5}
-.msg{font-size:13px;color:var(--warn);margin-top:10px;display:none}
-input,select{width:100%;padding:11px;margin-bottom:10px;border:1px solid var(--line);
-border-radius:10px;background:var(--bg);color:var(--txt);font-size:15px;font-family:inherit}
-label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px}
+.msg{font-size:15px;color:var(--warn);margin-top:10px;display:none}
+input,select{width:100%;padding:12px;margin-bottom:10px;border:1px solid var(--line);
+border-radius:10px;background:var(--bg);color:var(--txt);font-size:16.5px;font-family:inherit}
+label{display:block;font-size:13.5px;color:var(--mut);margin-bottom:4px}
 .inline{display:flex;gap:8px}
 .inline>*{flex:1}
 .days{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
-.day{flex:1;min-width:38px;padding:8px 0;text-align:center;font-size:12px;font-weight:600;
+.day{flex:1;min-width:38px;padding:9px 0;text-align:center;font-size:13.5px;font-weight:600;
 border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--mut);
 cursor:pointer;user-select:none}
 .day.sel{background:var(--b);border-color:var(--b);color:#fff}
 .sched{display:flex;align-items:center;justify-content:space-between;gap:8px;
-padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+padding:10px 0;border-bottom:1px solid var(--line);font-size:16px}
 .sched .del{background:none;color:var(--bad);font-size:18px;padding:2px 10px}
-.sched .meta{color:var(--mut);font-size:12px}
-.empty{color:var(--mut);font-size:13px;padding:6px 0}
-.kv{display:flex;justify-content:space-between;font-size:13px;padding:4px 0}
+.sched .meta{color:var(--mut);font-size:13.5px}
+.empty{color:var(--mut);font-size:15px;padding:6px 0}
+.kv{display:flex;justify-content:space-between;font-size:15px;padding:4px 0}
 .kv span:first-child{color:var(--mut)}
-.radio{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px}
+.radio{display:flex;align-items:center;gap:9px;margin-bottom:11px;font-size:16px}
 .radio input{width:auto;margin:0}
-.desc{font-size:13px;color:var(--mut);margin:0 0 10px;line-height:1.5}
+.desc{font-size:15px;color:var(--mut);margin:0 0 10px;line-height:1.5}
 .linkrow{display:flex;gap:8px}
-.linkrow input{direction:ltr;text-align:left;font-size:13px;margin-bottom:0}
+.linkrow input{direction:ltr;text-align:left;font-size:14px;margin-bottom:0}
 .linkrow button{flex:none}
 .led{width:14px;height:14px;border-radius:50%;background:#4b5563;flex:none;
 display:inline-block;transition:background .3s,box-shadow .3s}
@@ -69,7 +69,7 @@ animation:ledpulse 1.6s ease-in-out infinite}
 @keyframes ledpulse{50%{box-shadow:0 0 4px rgba(34,197,94,.35)}}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
 background:#1e293b;border:1px solid var(--line);color:var(--txt);padding:11px 18px;
-border-radius:12px;font-size:14px;display:none;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.5)}
 </style></head><body><div class="wrap">
 
 <header>
@@ -337,13 +337,15 @@ toast(r.ok?t('queued'):t('noCode'))}catch(e){toast(t('err'))}}
 async function doRec(b){var m=$('recmsg');
 var was=!!(ST&&ST.codes&&ST.codes[b]&&ST.codes[b].set);
 try{await fetch('/api/record?btn='+b,{method:'POST'})}catch(e){toast(t('err'));return}
-m.textContent=t('recording');m.style.display='block';
-var n=0,iv=setInterval(async function(){n++;await refresh();
+m.textContent=t('recording')+' (30)';m.style.display='block';
+var n=0,iv=setInterval(async function(){n++;
+m.textContent=t('recording')+' ('+Math.max(0,30-n)+')';
+await refresh();
 var now=!!(ST&&ST.codes&&ST.codes[b]&&ST.codes[b].set);
 var lc=ST&&ST.lastCapture;
 var info=(lc&&lc.btn==b&&lc.proto)?' ('+lc.proto+', '+lc.len+')':'';
 if(!was&&now){clearInterval(iv);m.style.display='none';toast(t('recOk')+info);return}
-if(n>=16){clearInterval(iv);m.style.display='none';
+if(n>=30){clearInterval(iv);m.style.display='none';
 toast(was?t('saved')+info:(lc&&lc.btn==b&&lc.overflow?t('recOvf'):t('recFail')))}},1000)}
 
 async function addSched(){if(!selDays.length){toast(t('pickDay'));return}
