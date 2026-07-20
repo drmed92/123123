@@ -68,6 +68,9 @@ padding:15px 13px;border-bottom:1px solid var(--line);cursor:pointer;font-size:1
 .spin{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--b2);
 border-radius:50%;margin:14px auto;animation:sp 1s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
+.linkrow{display:flex;gap:8px;margin:4px 0 10px}
+.linkrow input{direction:ltr;text-align:left;font-size:15px;margin:0}
+.linkrow button{flex:none;background:var(--line)}
 </style></head><body>
 <div class="card">
   <button class="lang" id="langbtn" onclick="setLang(L=='en'?'ar':'en',true)">EN</button>
@@ -113,6 +116,8 @@ en:{
  dOn:'ON button',dOff:'OFF button',dEco:'ECO button',dWifi:'Wi-Fi',dGen:'Generator',
  done:'recorded',skipped:'skipped',connected:'connected',enabled:'enabled',disabled:'off',
  dNote:'Your personal internet control link will appear on the main page once the device connects to the server.',
+ dLink:'Your internet control link — save it and open it from anywhere:',
+ copy:'Copy',copied:'Link copied.',
  open:'Open control panel',
  delayS:['3 seconds','5 seconds','10 seconds','15 seconds','30 seconds','1 minute','2 minutes','5 minutes']},
 ar:{
@@ -152,6 +157,8 @@ ar:{
  dOn:'زر التشغيل',dOff:'زر الإطفاء',dEco:'الزر الاقتصادي',dWifi:'الواي فاي',dGen:'المولّدة',
  done:'مسجَّل',skipped:'تم تخطيه',connected:'متصل',enabled:'مفعَّل',disabled:'معطَّل',
  dNote:'رابط التحكم عبر الإنترنت الخاص بك سيظهر في الصفحة الرئيسية بعد اتصال الجهاز بالخادم.',
+ dLink:'رابط التحكم عبر الإنترنت الخاص بك — احفظه وافتحه من أي مكان:',
+ copy:'نسخ',copied:'تم نسخ الرابط.',
  open:'فتح لوحة التحكم',
  delayS:['٣ ثوانٍ','٥ ثوانٍ','١٠ ثوانٍ','١٥ ثانية','٣٠ ثانية','دقيقة واحدة','دقيقتان','٥ دقائق']}};
 var DELAYS=[3,5,10,15,30,60,120,300];
@@ -319,16 +326,34 @@ go('done')}
 async function showDone(){dots(5);
 try{await fetch('/api/init',{method:'POST'})}catch(e){}
 await getStatus();
+renderDoneCard();
+// The claim can take a few more seconds after Wi-Fi came up; keep polling
+// and swap the generic note for the real link the moment it exists.
+if(!(ST&&ST.remote&&ST.remote.claimed)){var n=0;
+every(3000,async function(){n++;await getStatus();
+if(ST&&ST.remote&&ST.remote.claimed){clearTimers();renderDoneCard()}
+else if(n>=30)clearTimers()})}}
+function renderDoneCard(){
 var row=function(name,ok,okTxt,noTxt){
 return name+': <b'+(ok?'':' style="color:var(--mut)"')+'>'+(ok?okTxt:noTxt)+'</b><br>'};
+var r=(ST&&ST.remote)||{};
+var linkPart=(r.claimed&&r.link)
+?'<p style="margin-bottom:6px">'+t('dLink')+'</p>'+
+ '<div class="linkrow"><input id="wlink" readonly value="'+r.link+'">'+
+ '<button onclick="copyWLink()">'+t('copy')+'</button></div>'
+:'<p>'+t('dNote')+'</p>';
 h('<h1>'+t('dTitle')+'</h1><div class="okmark">✓</div><p class="sum" style="text-align:center">'+
 row(t('dOn'),codeSet('on'),t('done'),t('skipped'))+
 row(t('dOff'),codeSet('off'),t('done'),t('skipped'))+
 row(t('dEco'),codeSet('eco'),t('done'),t('skipped'))+
 row(t('dWifi'),ST&&ST.wifi&&ST.wifi.connected,t('connected'),t('skipped'))+
 row(t('dGen'),gsChoice&&gsChoice!='disabled',t('enabled'),t('disabled'))+
-'</p><p>'+t('dNote')+'</p>'+
+'</p>'+linkPart+
 '<button class="pri" onclick="location.href=\'/\'">'+t('open')+'</button>')}
+function copyWLink(){var i=$('wlink');i.select();i.setSelectionRange(0,200);
+try{navigator.clipboard.writeText(i.value).then(function(){},function(){document.execCommand('copy')})}
+catch(e){document.execCommand('copy')}
+var b=document.querySelector('.linkrow button');if(b)b.textContent=t('copied')}
 
 /* ---------- boot ---------- */
 (async function(){

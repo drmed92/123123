@@ -200,6 +200,7 @@ app.get('/api/r/:code/events', rateLimit, (req, res) => {
 });
 
 app.get('/healthz', (req, res) => res.send('ok'));
-app.get('/', (req, res) => res.send('ERemote server'));
+app.get('/', (req, res) =>
+  res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => console.log(`[http] listening on :${PORT}  base ${BASE_URL}`));
