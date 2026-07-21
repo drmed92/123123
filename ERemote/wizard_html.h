@@ -92,6 +92,7 @@ en:{
  test:'Test it on the AC',testSent:'Sent — did the AC respond?',
  rerec:'Record again',retry:'Try again',next:'Next',back:'Back',
  skipEco:'My remote has no ECO button — skip',
+ skipRec:'Skip this button — set it up later',
  fTitle:'Connect to home Wi-Fi',
  fSub:'Choose your home Wi-Fi so the device gets the correct time and can be controlled from the internet.',
  scanning:'Searching for networks…',refresh:'Search again',
@@ -134,6 +135,7 @@ ar:{
  test:'جرّبه على المكيف',testSent:'تم الإرسال — هل استجاب المكيف؟',
  rerec:'إعادة التسجيل',retry:'حاول مجدداً',next:'التالي',back:'رجوع',
  skipEco:'الريموت لا يحتوي على زر اقتصادي — تخطَّ',
+ skipRec:'تخطَّ هذا الزر — أعدّه لاحقاً',
  fTitle:'الاتصال بواي فاي المنزل',
  fSub:'اختر شبكة الواي فاي في منزلك ليحصل الجهاز على الوقت الصحيح وتتمكن من التحكم به عبر الإنترنت.',
  scanning:'جارٍ البحث عن الشبكات…',refresh:'إعادة البحث',
@@ -212,7 +214,7 @@ clearTimers();                    // drop any prior record window still polling
 h(recHdr(b)+'<p>'+t('recHow').replace('{B}',t('bn_'+b))+'</p>'+
 '<div class="pulse">⚫</div><div class="count" id="cnt">30</div>'+
 '<div class="st" id="rst">'+t('listening')+'</div>'+
-(b=='eco'?'<button class="ghost" onclick="ecoSkipped=true;go(nextOf(\'eco\'))">'+t('skipEco')+'</button>':''));
+'<button class="ghost" onclick="go(nextOf(\''+b+'\'))">'+t(b=='eco'?'skipEco':'skipRec')+'</button>');
 fetch('/api/record?btn='+b,{method:'POST'}).catch(function(){});
 var n=0;
 every(1000,async function(){n++;
@@ -224,7 +226,7 @@ var lc=ST&&ST.lastCapture,ovf=lc&&lc.btn==b&&lc.overflow;
 h(recHdr(b)+'<div class="okmark" style="background:#3a1d1d;color:var(--bad)">✗</div>'+
 '<div class="st bad">'+(ovf?t('recOvf'):t('recFail'))+'</div>'+
 '<button class="pri" onclick="startRec(\''+b+'\')">'+t('retry')+'</button>'+
-(b=='eco'?'<button class="ghost" onclick="ecoSkipped=true;go(nextOf(\'eco\'))">'+t('skipEco')+'</button>':''))}})}
+'<button class="ghost" onclick="go(nextOf(\''+b+'\'))">'+t(b=='eco'?'skipEco':'skipRec')+'</button>')}})}
 function renderRecDone(b,pre){
 var lc=ST&&ST.lastCapture,info=(lc&&lc.btn==b&&lc.proto)?' ('+lc.proto+')':'';
 h(recHdr(b)+'<div class="okmark">✓</div>'+
