@@ -614,23 +614,26 @@ void scanTask(){
   }
   if(n==WIFI_SCAN_RUNNING) return;
 
-  bool associating = cfg.ssid.length() && WiFi.status()!=WL_CONNECTED &&
-                     staBeginAt && millis()-staBeginAt<25000;
+  // NEVER scan while the STA is associating with the router: any scan (even a
+  // 120 ms single-channel probe) yanks the shared radio off the router's
+  // channel mid-handshake and makes the join fail. This window is what broke
+  // Wi-Fi setup. Also hold off briefly after a fresh connect so the link
+  // settles before genset probing resumes.
+  if(cfg.ssid.length() && WiFi.status()!=WL_CONNECTED &&
+     staBeginAt && millis()-staBeginAt<25000) return;
 
-  // Full sweeps hop all channels for ~2 s, so never during association.
-  if(scanWanted && !associating){
+  if(scanWanted){
     scanFull=true; gsLastScanAt=millis();
-    WiFi.scanNetworks(true, true);
+    WiFi.scanNetworks(true, true);                   // full all-channel sweep
     return;
   }
   if(millis()-gsLastScanAt<GS_FAST_INTERVAL_MS) return;
   gsLastScanAt=millis();
-  if(!gsPresent && !associating &&
-     millis()-lastFullScanAt>GS_FULL_FALLBACK_MS){
+  if(!gsPresent && millis()-lastFullScanAt>GS_FULL_FALLBACK_MS){
     scanFull=true;                                   // re-learn channel safety net
     WiFi.scanNetworks(true, true);
   } else {
-    scanFull=false;                                  // 120 ms probe, always safe
+    scanFull=false;                                  // 120 ms single-channel probe
     WiFi.scanNetworks(true, false, cfg.gsChannel, (uint8_t*)cfg.gsSsid.c_str());
   }
 }

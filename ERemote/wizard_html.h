@@ -342,9 +342,10 @@ function renderDoneCard(){
 var row=function(name,ok,okTxt,noTxt){
 return name+': <b'+(ok?'':' style="color:var(--mut)"')+'>'+(ok?okTxt:noTxt)+'</b><br>'};
 var r=(ST&&ST.remote)||{};
-var linkPart=(r.claimed&&r.link)
+var rlink=r.code?('https://er.my.to/r/'+r.code):'';   // always show the domain link
+var linkPart=(r.claimed&&rlink)
 ?'<p style="margin-bottom:6px">'+t('dLink')+'</p>'+
- '<div class="linkrow"><input id="wlink" readonly value="'+r.link+'">'+
+ '<div class="linkrow"><input id="wlink" readonly value="'+rlink+'">'+
  '<button onclick="copyWLink()">'+t('copy')+'</button></div>'+
  '<p style="color:var(--bad);font-weight:800;font-size:15.5px;line-height:1.7;'+
  'background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.4);'+
