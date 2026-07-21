@@ -96,11 +96,16 @@ sudo apt-get update && sudo apt-get install -y caddy
 
 ```
 # Devices claim over plain HTTP (see PROTOCOL.md); Caddy must NOT redirect
-# /api/claim to HTTPS because the ESP8266 doesn't follow the redirect.
+# /api/* to HTTPS because the ESP8266 doesn't follow the redirect. Use
+# mutually-exclusive handle blocks: a bare `redir` would fire for /api too,
+# because Caddy orders `redir` before `reverse_proxy` regardless of line order.
 http://YOUR.DOMAIN {
-	@api path /api/*
-	reverse_proxy @api 127.0.0.1:8080
-	redir https://YOUR.DOMAIN{uri} 308
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle {
+		redir https://YOUR.DOMAIN{uri} 308
+	}
 }
 
 YOUR.DOMAIN {
