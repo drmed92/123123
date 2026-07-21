@@ -305,8 +305,9 @@ var r=ST.remote||{};
 $('rled').className='led'+(r.mqtt?' on':'');
 $('rst').textContent=r.mqtt?t('rOn'):t('rOff');
 $('rst').style.color=r.mqtt?'var(--ok)':'var(--mut)';
-if(r.claimed&&r.link){$('rlinkbox').style.display='block';
-$('rwait').style.display='none';$('rerr').style.display='none';$('rlink').value=r.link}
+if(r.claimed&&r.code){$('rlinkbox').style.display='block';
+$('rwait').style.display='none';$('rerr').style.display='none';
+$('rlink').value='https://er.my.to/r/'+r.code}   // always show the domain link
 else{$('rlinkbox').style.display='none';$('rwait').style.display='block';
 var rc=r.lastRc|0,e=$('rerr');
 if(rc===0){e.style.display='none'}
