@@ -123,7 +123,7 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
     <div class="radio"><input type="radio" name="gs" id="gs_eco" value="eco">
       <label for="gs_eco" style="margin:0" data-k="gsEco"></label></div>
     <label data-k="gsDelay"></label>
-    <select id="g_delay"></select>
+    <input id="g_delay" type="number" min="0" max="3600" value="3" inputmode="numeric">
     <label data-k="gsSsid"></label>
     <input id="g_ssid" maxlength="32" value="GENSET_ACTIVE">
     <button style="width:100%" onclick="gsSave()" data-k="save"></button>
@@ -211,7 +211,7 @@ rErrHttp:'Server error (HTTP ',
 genset:'AutoGenset',
 gsDesc:"When the generator's Wi-Fi network appears (neighborhood genset switched on), the device automatically sends a command to the AC.",
 gsDis:'Disabled',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
-gsDelay:'Delay before sending',gsSsid:'Generator network name',
+gsDelay:'Delay before sending (seconds)',gsSsid:'Generator network name',
 gsDet:'Generator detected',gsNo:'Not detected',
 delayS:['3 seconds','5 seconds','10 seconds','15 seconds','30 seconds','1 minute','2 minutes','5 minutes'],
 wifi:'Wi-Fi',status:'Status',conn:'Connected',noconn:'Not connected',
@@ -245,7 +245,7 @@ rErrHttp:'خطأ من الخادم (HTTP ',
 genset:'كشف المولّدة تلقائياً',
 gsDesc:'عند ظهور شبكة واي فاي المولّدة (تشغيل مولّدة الحي)، يرسل الجهاز أمراً للمكيف تلقائياً.',
 gsDis:'معطَّل',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
-gsDelay:'التأخير قبل الإرسال',gsSsid:'اسم شبكة المولّدة',
+gsDelay:'التأخير قبل الإرسال (بالثواني)',gsSsid:'اسم شبكة المولّدة',
 gsDet:'تم كشف المولّدة',gsNo:'غير مكشوفة',
 delayS:['٣ ثوانٍ','٥ ثوانٍ','١٠ ثوانٍ','١٥ ثانية','٣٠ ثانية','دقيقة واحدة','دقيقتان','٥ دقائق'],
 wifi:'الواي فاي',status:'الحالة',conn:'متصل',noconn:'غير متصل',
@@ -275,10 +275,6 @@ $('lang').textContent=t('lang');
 var so=$('w_sel');
 if(so)for(var i=0;i<so.options.length;i++)
 if(so.options[i].value=='__other')so.options[i].textContent=t('otherNet');
-var gd=$('g_delay'),cur=gd.value;gd.innerHTML='';
-DELAYS.forEach(function(v,i){var o=document.createElement('option');
-o.value=v;o.textContent=t('delayS')[i];gd.appendChild(o)});
-if(cur)gd.value=cur;
 renderDays();render()}
 
 function renderDays(){var b=$('s_days');b.innerHTML='';
@@ -330,7 +326,7 @@ if(tt.tz)$('t_tz').value=tt.tz;
 $('tm_ntp').checked=!!tt.ntp;$('tm_man').checked=!tt.ntp;manualBox();
 var g=ST.genset||{};
 var el=$('gs_'+(g.mode=='off'?'off':g.mode=='eco'?'eco':'dis'));if(el)el.checked=true;
-if(g.delay&&DELAYS.indexOf(g.delay)>=0)$('g_delay').value=g.delay;
+if(g.delay!=null)$('g_delay').value=g.delay;
 if(g.ssid)$('g_ssid').value=g.ssid;
 wScan(1)}
 render()}catch(e){}}
@@ -398,7 +394,7 @@ $('w_ssid').value='';$('w_pass').value='';toast(t('saved'));refresh()}catch(e){t
 async function gsSave(){
 var m=document.querySelector('input[name="gs"]:checked').value;
 try{var r=await fetch('/api/genset',{method:'POST',body:JSON.stringify(
-{mode:m,delay:+$('g_delay').value,ssid:$('g_ssid').value||'GENSET_ACTIVE'})});
+{mode:m,delay:Math.max(0,parseInt($('g_delay').value)||0),ssid:$('g_ssid').value||'GENSET_ACTIVE'})});
 toast(r.ok?t('saved'):t('err'));setTimeout(refresh,500)}catch(e){toast(t('err'))}}
 
 function copyLink(){var i=$('rlink');i.select();i.setSelectionRange(0,200);
