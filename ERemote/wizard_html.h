@@ -109,7 +109,7 @@ en:{
  yes:'Yes',no:'No',
  gAction:'When the generator turns on:',
  gOff:'Turn the AC OFF',gEco:'Switch to ECO',
- gDelay:'Delay before sending',
+ gDelay:'Delay before sending (seconds)',
  gSeen:'✓ Generator network is visible now',
  gNotSeen:'Generator network is not visible right now (that’s OK if the generator is off).',
  gSave:'Save and continue',
@@ -152,7 +152,7 @@ ar:{
  yes:'نعم',no:'لا',
  gAction:'عند تشغيل المولّدة:',
  gOff:'إطفاء المكيف',gEco:'التحويل للوضع الاقتصادي',
- gDelay:'التأخير قبل الإرسال',
+ gDelay:'التأخير قبل الإرسال (بالثواني)',
  gSeen:'✓ شبكة المولّدة مرئية الآن',
  gNotSeen:'شبكة المولّدة غير مرئية حالياً (هذا طبيعي إذا كانت المولّدة مطفأة).',
  gSave:'حفظ ومتابعة',
@@ -305,14 +305,13 @@ try{await fetch('/api/genset',{method:'POST',body:JSON.stringify(
 {mode:'disabled',delay:3,ssid:'GENSET_ACTIVE'})})}catch(e){}
 go('done')}
 function gensetYes(){clearTimers();
-var opts='';DELAYS.forEach(function(v,i){
-opts+='<option value="'+v+'"'+(v==10?' selected':'')+'>'+t('delayS')[i]+'</option>'});
 h('<h1>'+t('gTitle')+'</h1><p>'+t('gAction')+'</p>'+
 '<div class="radio"><input type="radio" name="ga" id="ga_off" checked>'+
 '<label for="ga_off" style="font-size:15px;color:var(--txt)">'+t('gOff')+'</label></div>'+
 '<div class="radio"><input type="radio" name="ga" id="ga_eco">'+
 '<label for="ga_eco" style="font-size:15px;color:var(--txt)">'+t('gEco')+'</label></div>'+
-'<label>'+t('gDelay')+'</label><select id="gdel">'+opts+'</select>'+
+'<label>'+t('gDelay')+'</label>'+
+'<input id="gdel" type="number" min="0" max="3600" value="3" inputmode="numeric">'+
 '<div class="st" id="gseen"></div>'+
 '<button class="pri" onclick="gensetSave()">'+t('gSave')+'</button>'+
 '<button class="ghost" onclick="showGenset()">'+t('back')+'</button>');
@@ -324,7 +323,7 @@ chk();every(3000,chk)}
 async function gensetSave(){
 gsChoice=$('ga_eco').checked?'eco':'off';
 try{await fetch('/api/genset',{method:'POST',body:JSON.stringify(
-{mode:gsChoice,delay:+$('gdel').value,ssid:'GENSET_ACTIVE'})})}catch(e){}
+{mode:gsChoice,delay:Math.max(0,parseInt($('gdel').value)||0),ssid:'GENSET_ACTIVE'})})}catch(e){}
 go('done')}
 
 /* ---------- done ---------- */
