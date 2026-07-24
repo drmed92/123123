@@ -90,7 +90,8 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
     <label for="gs_off" style="margin:0" data-k="gsOff"></label></div>
   <div class="radio"><input type="radio" name="gs" id="gs_eco" value="eco">
     <label for="gs_eco" style="margin:0" data-k="gsEco"></label></div>
-  <label data-k="gsDelay"></label><select id="g_delay"></select>
+  <label data-k="gsDelay"></label>
+  <input id="g_delay" type="number" min="0" max="3600" value="3" inputmode="numeric">
   <button style="width:100%" onclick="saveGenset()" data-k="save"></button>
 </section>
 
@@ -135,7 +136,7 @@ sent:'Command sent.',saved:'Saved.',err:'Error — try again.',
 seen:'Last update: ',never:'Device has not connected yet.',
 offline2:'The device is offline. Changes will apply when it reconnects.',
 genTitle:'AutoGenset',gsDis:'Disabled',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
-gsDelay:'Delay before sending',
+gsDelay:'Delay before sending (seconds)',
 schedules:'Schedules',action:'Action',at:'Time',days:'Days',add:'Add schedule',
 none:'No schedules yet.',pickDay:'Pick at least one day.',
 timeTitle:'Time & clock',ntp:'Automatic (internet time)',manual:'Set manually',
@@ -148,15 +149,12 @@ sent:'تم إرسال الأمر.',saved:'تم الحفظ.',err:'خطأ — حا
 seen:'آخر تحديث: ',never:'الجهاز لم يتصل بعد.',
 offline2:'الجهاز غير متصل. ستُطبَّق التغييرات عند عودته للاتصال.',
 genTitle:'كشف المولّدة تلقائياً',gsDis:'معطَّل',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
-gsDelay:'التأخير قبل الإرسال',
+gsDelay:'التأخير قبل الإرسال (بالثواني)',
 schedules:'الجدولة',action:'الإجراء',at:'الوقت',days:'الأيام',add:'إضافة جدولة',
 none:'لا توجد جدولات بعد.',pickDay:'اختر يوماً واحداً على الأقل.',
 timeTitle:'الوقت والساعة',ntp:'تلقائي (وقت الإنترنت)',manual:'ضبط يدوي',
 tz:'المنطقة الزمنية',apply:'تطبيق',baghdad:'بغداد / الكويت / الرياض (+3)',dubai:'دبي (+4)',
 lang:'EN',dayS:['أحد','إثن','ثلا','أرب','خمي','جمع','سبت']}};
-var DELAYS=[3,5,10,15,30,60,120,300];
-var DELAYL={en:['3 seconds','5 seconds','10 seconds','15 seconds','30 seconds','1 minute','2 minutes','5 minutes'],
-ar:['٣ ثوانٍ','٥ ثوانٍ','١٠ ثوانٍ','١٥ ثانية','٣٠ ثانية','دقيقة واحدة','دقيقتان','٥ دقائق']};
 var L='ar',ST=null,selDays=[],first=true,CODE=location.pathname.split('/').pop();
 
 function t(k){return D[L][k]}
@@ -169,9 +167,6 @@ document.documentElement.lang=l;document.documentElement.dir=(l=='ar')?'rtl':'lt
 var els=document.querySelectorAll('[data-k]');
 for(var i=0;i<els.length;i++)els[i].textContent=t(els[i].getAttribute('data-k'));
 $('lang').textContent=t('lang');
-var gd=$('g_delay'),cur=gd.value;gd.innerHTML='';
-DELAYS.forEach(function(v,i){var o=document.createElement('option');
-o.value=v;o.textContent=DELAYL[l][i];gd.appendChild(o)});if(cur)gd.value=cur;
 renderDays();render()}
 
 function renderDays(){var b=$('s_days');b.innerHTML='';
@@ -202,7 +197,7 @@ var x=document.createElement('button');x.className='del';x.textContent='×';
 x.onclick=function(){delSched(s.id)};d.appendChild(x);sl.appendChild(d)});
 if(first){first=false;
 var el=$('gs_'+(g.mode=='off'?'off':g.mode=='eco'?'eco':'dis'));if(el)el.checked=true;
-if(g.delay&&DELAYS.indexOf(g.delay)>=0)$('g_delay').value=g.delay;
+if(g.delay!=null)$('g_delay').value=g.delay;
 if(tt.tz)$('t_tz').value=tt.tz;
 $('tm_ntp').checked=tt.ntp!==false;$('tm_man').checked=tt.ntp===false;manualBox()}}
 
@@ -211,7 +206,7 @@ headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r
 
 async function cmd(b){toast(await post({a:'send',btn:b})?t('sent'):t('err'))}
 async function saveGenset(){var m=document.querySelector('input[name="gs"]:checked').value;
-toast(await post({a:'genset',mode:m,delay:+$('g_delay').value,ssid:(ST.genset&&ST.genset.ssid)||'GENSET_ACTIVE'})?t('saved'):t('err'))}
+toast(await post({a:'genset',mode:m,delay:Math.max(0,parseInt($('g_delay').value)||0),ssid:(ST.genset&&ST.genset.ssid)||'GENSET_ACTIVE'})?t('saved'):t('err'))}
 async function addSched(){if(!selDays.length){toast(t('pickDay'));return}
 var tm=$('s_time').value.split(':');
 if(await post({a:'sched_add',action:$('s_act').value,hour:+tm[0],min:+tm[1],days:selDays})){
