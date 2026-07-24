@@ -116,12 +116,22 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
   <p class="desc" data-k="gsDesc"></p>
   <div class="kv"><span data-k="status"></span><span id="gdet">-</span></div>
   <div style="margin-top:8px">
+    <label data-k="gsOnHdr" style="font-weight:700;color:var(--txt);margin-bottom:6px"></label>
     <div class="radio"><input type="radio" name="gs" id="gs_dis" value="disabled" checked>
       <label for="gs_dis" style="margin:0" data-k="gsDis"></label></div>
     <div class="radio"><input type="radio" name="gs" id="gs_off" value="off">
       <label for="gs_off" style="margin:0" data-k="gsOff"></label></div>
     <div class="radio"><input type="radio" name="gs" id="gs_eco" value="eco">
       <label for="gs_eco" style="margin:0" data-k="gsEco"></label></div>
+    <label data-k="gsOffHdr" style="font-weight:700;color:var(--txt);margin:10px 0 6px"></label>
+    <div class="radio"><input type="radio" name="gso" id="gso_dis" value="disabled" checked>
+      <label for="gso_dis" style="margin:0" data-k="gsDis"></label></div>
+    <div class="radio"><input type="radio" name="gso" id="gso_on" value="on">
+      <label for="gso_on" style="margin:0" data-k="gsOn"></label></div>
+    <div class="radio"><input type="radio" name="gso" id="gso_off" value="off">
+      <label for="gso_off" style="margin:0" data-k="gsOff"></label></div>
+    <div class="radio"><input type="radio" name="gso" id="gso_eco" value="eco">
+      <label for="gso_eco" style="margin:0" data-k="gsEco"></label></div>
     <label data-k="gsDelay"></label>
     <input id="g_delay" type="number" min="0" max="3600" value="3" inputmode="numeric">
     <label data-k="gsSsid"></label>
@@ -210,7 +220,8 @@ rErr403:'The server refused this device (identity conflict) — an old registrat
 rErrHttp:'Server error (HTTP ',
 genset:'AutoGenset',
 gsDesc:"When the generator's Wi-Fi network appears (neighborhood genset switched on), the device automatically sends a command to the AC.",
-gsDis:'Disabled',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
+gsDis:'Disabled',gsOn:'Turn AC ON',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
+gsOnHdr:'When the generator turns ON:',gsOffHdr:'When the generator turns OFF:',
 gsDelay:'Delay before sending (seconds)',gsSsid:'Generator network name',
 gsDet:'Generator detected',gsNo:'Not detected',
 delayS:['3 seconds','5 seconds','10 seconds','15 seconds','30 seconds','1 minute','2 minutes','5 minutes'],
@@ -244,7 +255,8 @@ rErr403:'رفض الخادم هذا الجهاز (تعارض هوية) — يج�
 rErrHttp:'خطأ من الخادم (HTTP ',
 genset:'كشف المولّدة تلقائياً',
 gsDesc:'عند ظهور شبكة واي فاي المولّدة (تشغيل مولّدة الحي)، يرسل الجهاز أمراً للمكيف تلقائياً.',
-gsDis:'معطَّل',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
+gsDis:'معطَّل',gsOn:'تشغيل المكيف',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
+gsOnHdr:'عند تشغيل المولّدة:',gsOffHdr:'عند إطفاء المولّدة:',
 gsDelay:'التأخير قبل الإرسال (بالثواني)',gsSsid:'اسم شبكة المولّدة',
 gsDet:'تم كشف المولّدة',gsNo:'غير مكشوفة',
 delayS:['٣ ثوانٍ','٥ ثوانٍ','١٠ ثوانٍ','١٥ ثانية','٣٠ ثانية','دقيقة واحدة','دقيقتان','٥ دقائق'],
@@ -326,6 +338,7 @@ if(tt.tz)$('t_tz').value=tt.tz;
 $('tm_ntp').checked=!!tt.ntp;$('tm_man').checked=!tt.ntp;manualBox();
 var g=ST.genset||{};
 var el=$('gs_'+(g.mode=='off'?'off':g.mode=='eco'?'eco':'dis'));if(el)el.checked=true;
+var om=g.offMode,oe=$('gso_'+(om=='on'?'on':om=='off'?'off':om=='eco'?'eco':'dis'));if(oe)oe.checked=true;
 if(g.delay!=null)$('g_delay').value=g.delay;
 if(g.ssid)$('g_ssid').value=g.ssid;
 wScan(1)}
@@ -393,8 +406,9 @@ $('w_ssid').value='';$('w_pass').value='';toast(t('saved'));refresh()}catch(e){t
 
 async function gsSave(){
 var m=document.querySelector('input[name="gs"]:checked').value;
+var om=document.querySelector('input[name="gso"]:checked').value;
 try{var r=await fetch('/api/genset',{method:'POST',body:JSON.stringify(
-{mode:m,delay:Math.max(0,parseInt($('g_delay').value)||0),ssid:$('g_ssid').value||'GENSET_ACTIVE'})});
+{mode:m,offMode:om,delay:Math.max(0,parseInt($('g_delay').value)||0),ssid:$('g_ssid').value||'GENSET_ACTIVE'})});
 toast(r.ok?t('saved'):t('err'));setTimeout(refresh,500)}catch(e){toast(t('err'))}}
 
 function copyLink(){var i=$('rlink');i.select();i.setSelectionRange(0,200);
