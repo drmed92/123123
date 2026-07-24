@@ -215,12 +215,14 @@ h(recHdr(b)+'<p>'+t('recHow').replace('{B}',t('bn_'+b))+'</p>'+
 '<div class="pulse">⚫</div><div class="count" id="cnt">30</div>'+
 '<div class="st" id="rst">'+t('listening')+'</div>'+
 '<button class="ghost" onclick="go(nextOf(\''+b+'\'))">'+t(b=='eco'?'skipEco':'skipRec')+'</button>');
+var seq0=(ST&&ST.lastCapture&&ST.lastCapture.seq)||0;   // baseline; wait for a NEW capture
 fetch('/api/record?btn='+b,{method:'POST'}).catch(function(){});
 var n=0;
 every(1000,async function(){n++;
 var c=$('cnt');if(c)c.textContent=Math.max(0,30-n);
 await getStatus();
-if(codeSet(b)){clearTimers();renderRecDone(b,false);return}
+var lc=ST&&ST.lastCapture;
+if(lc&&lc.seq!==seq0&&lc.btn==b){clearTimers();renderRecDone(b,false);return}
 if(n>=30){clearTimers();
 var lc=ST&&ST.lastCapture,ovf=lc&&lc.btn==b&&lc.overflow;
 h(recHdr(b)+'<div class="okmark" style="background:#3a1d1d;color:var(--bad)">✗</div>'+
