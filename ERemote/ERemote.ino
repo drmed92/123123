@@ -161,6 +161,7 @@ String   lastCapBtn    = "";     // diagnostics for the portal: last capture's
 String   lastCapProto  = "";     // button, detected protocol, pulse count,
 uint16_t lastCapLen    = 0;      // and whether the buffer overflowed
 bool     lastCapOvf    = false;
+uint16_t capSeq        = 0;      // ++ on every saved capture; UI detects a NEW one
 String   pendingSend   = "";     // queued transmit (non-blocking delay)
 uint32_t sendAt        = 0;
 
@@ -388,6 +389,7 @@ void handleStatus(){
   d["lastCapture"]["proto"]=lastCapProto;
   d["lastCapture"]["len"]=lastCapLen;
   d["lastCapture"]["overflow"]=lastCapOvf;
+  d["lastCapture"]["seq"]=capSeq;
 
   d["remote"]["claimed"]=(bool)ident.claimed;
   d["remote"]["code"]=ident.code;
@@ -517,7 +519,7 @@ void captureIR(){
           String proto=typeToString(results.decode_type);   // "UNKNOWN" is fine
           saveIR(recordTarget,raw,len,proto); delete[] raw;
           lastCapBtn=recordTarget; lastCapProto=proto;
-          lastCapLen=len; lastCapOvf=results.overflow;
+          lastCapLen=len; lastCapOvf=results.overflow; capSeq++;
           recordTarget="";                     // stop the record window now
           statePubQueued=true;                 // tell the server a code changed
         }

@@ -338,18 +338,18 @@ toast(r.ok?t('queued'):t('noCode'))}catch(e){toast(t('err'))}}
 var recIv=null;
 async function doRec(b){var m=$('recmsg');
 if(recIv){clearInterval(recIv);recIv=null}   // drop any previous button's window
-var was=!!(ST&&ST.codes&&ST.codes[b]&&ST.codes[b].set);
+var seq0=(ST&&ST.lastCapture&&ST.lastCapture.seq)||0;   // wait for a NEW capture
 try{await fetch('/api/record?btn='+b,{method:'POST'})}catch(e){toast(t('err'));return}
 m.textContent=t('recording')+' (30)';m.style.display='block';
 var n=0,iv=recIv=setInterval(async function(){n++;
 m.textContent=t('recording')+' ('+Math.max(0,30-n)+')';
 await refresh();
-var now=!!(ST&&ST.codes&&ST.codes[b]&&ST.codes[b].set);
 var lc=ST&&ST.lastCapture;
+var isNew=lc&&lc.seq!==seq0&&lc.btn==b;
 var info=(lc&&lc.btn==b&&lc.proto)?' ('+lc.proto+', '+lc.len+')':'';
-if(!was&&now){clearInterval(iv);m.style.display='none';toast(t('recOk')+info);return}
-if(n>=30){clearInterval(iv);m.style.display='none';
-toast(was?t('saved')+info:(lc&&lc.btn==b&&lc.overflow?t('recOvf'):t('recFail')))}},1000)}
+if(isNew){clearInterval(iv);recIv=null;m.style.display='none';toast(t('recOk')+info);return}
+if(n>=30){clearInterval(iv);recIv=null;m.style.display='none';
+toast(lc&&lc.btn==b&&lc.overflow?t('recOvf'):t('recFail'))}},1000)}
 
 async function addSched(){if(!selDays.length){toast(t('pickDay'));return}
 var tm=$('s_time').value.split(':');
