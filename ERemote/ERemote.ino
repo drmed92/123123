@@ -88,7 +88,7 @@ const uint16_t RECORD_TIMEOUT_MS = 30000;  // matches the wizard's visible count
 // every GS_FULL_FALLBACK_MS as a safety net to re-learn the emitter's channel
 // (persisted as cfg.gsChannel, learned automatically from full sweeps).
 const uint32_t GS_FAST_INTERVAL_MS = 5000;
-const uint32_t GS_FULL_FALLBACK_MS = 300000;
+const uint32_t GS_FULL_FALLBACK_MS = 60000;
 /* ------------------------------------------------------------------------- */
 
 // IR capture. (IRremoteESP8266 equivalents of Arduino-IRremote's
@@ -138,9 +138,11 @@ String devId;            // "d" + chip id in hex; MQTT username + topic segment
 // Config held in RAM
 struct Config {
   String ssid, pass, tz = "Asia/Baghdad"; bool ntp = true;
-  // AutoGenset: when a network named gsSsid appears, send gsMode's IR code
-  // ("off"/"eco") after gsDelay seconds; "disabled" turns the feature off.
-  String gsMode = "disabled", gsSsid = "GENSET_ACTIVE"; uint16_t gsDelay = 3;
+  // AutoGenset: when a network named gsSsid appears, send gsMode's IR code;
+  // when it disappears, send gsOffMode. Each is "on"/"off"/"eco" or
+  // "disabled"; both fire after gsDelay seconds.
+  String gsMode = "disabled", gsOffMode = "disabled", gsSsid = "GENSET_ACTIVE";
+  uint16_t gsDelay = 3;
   uint8_t gsChannel = 6;   // emitter's Wi-Fi channel; auto-learned from full sweeps
 } cfg;
 
@@ -167,7 +169,6 @@ uint32_t sendAt        = 0;
 
 // AutoGenset runtime state
 bool     gsPresent     = false;  // generator network currently visible
-bool     gsTriggered   = false;  // already fired for this appearance
 uint8_t  gsMiss        = 0;      // consecutive scans without the network
 uint32_t gsLastScanAt  = 0;
 
@@ -232,15 +233,16 @@ void applyTime(){
 void saveConfig(){
   JsonDocument d;
   d["ssid"]=cfg.ssid; d["pass"]=cfg.pass; d["tz"]=cfg.tz; d["ntp"]=cfg.ntp;
-  d["gsMode"]=cfg.gsMode; d["gsSsid"]=cfg.gsSsid; d["gsDelay"]=cfg.gsDelay;
-  d["gsChannel"]=cfg.gsChannel;
+  d["gsMode"]=cfg.gsMode; d["gsOffMode"]=cfg.gsOffMode;
+  d["gsSsid"]=cfg.gsSsid; d["gsDelay"]=cfg.gsDelay; d["gsChannel"]=cfg.gsChannel;
   File f=LittleFS.open("/config.json","w"); if(f){ serializeJson(d,f); f.close(); }
 }
 void loadConfig(){
   File f=LittleFS.open("/config.json","r"); if(!f) return;
   JsonDocument d; if(deserializeJson(d,f)==DeserializationError::Ok){
     cfg.ssid=d["ssid"]|""; cfg.pass=d["pass"]|""; cfg.tz=d["tz"]|"Asia/Baghdad"; cfg.ntp=d["ntp"]|true;
-    cfg.gsMode=d["gsMode"]|"disabled"; cfg.gsSsid=d["gsSsid"]|"GENSET_ACTIVE"; cfg.gsDelay=d["gsDelay"]|3;
+    cfg.gsMode=d["gsMode"]|"disabled"; cfg.gsOffMode=d["gsOffMode"]|"disabled";
+    cfg.gsSsid=d["gsSsid"]|"GENSET_ACTIVE"; cfg.gsDelay=d["gsDelay"]|3;
     cfg.gsChannel=d["gsChannel"]|6;
     provisioned=true;
   }
@@ -381,6 +383,7 @@ void handleStatus(){
   d["time"]["tz"]=cfg.tz;
 
   d["genset"]["mode"]=cfg.gsMode;
+  d["genset"]["offMode"]=cfg.gsOffMode;
   d["genset"]["ssid"]=cfg.gsSsid;
   d["genset"]["delay"]=cfg.gsDelay;
   d["genset"]["detected"]=gsPresent;
@@ -445,12 +448,14 @@ void applyTimeCfg(JsonDocument& d){
 }
 void applyGensetCfg(JsonDocument& d){
   String m=(const char*)(d["mode"]|"disabled");
-  cfg.gsMode=(m=="off"||m=="eco") ? m : "disabled";
+  cfg.gsMode=validBtn(m) ? m : "disabled";
+  String om=(const char*)(d["offMode"]|"disabled");
+  cfg.gsOffMode=validBtn(om) ? om : "disabled";
   cfg.gsDelay=d["delay"]|3;
   cfg.gsSsid=(const char*)(d["ssid"]|"GENSET_ACTIVE");
   if(!cfg.gsSsid.length()) cfg.gsSsid="GENSET_ACTIVE";
   saveConfig();
-  gsPresent=false; gsTriggered=false; gsMiss=0;   // re-arm with new settings
+  gsPresent=false; gsMiss=0;                       // re-arm with new settings
 }
 uint32_t schedAdd(JsonDocument& in){
   JsonDocument arr; readSched(arr); JsonArray a=arr.as<JsonArray>();
@@ -555,23 +560,24 @@ void checkSchedules(){
   }
 }
 
+void gensetFire(const String& m){                   // queue m's code after gsDelay
+  if(validBtn(m) && LittleFS.exists(irPath(m))){
+    pendingSend=m; sendAt=millis()+cfg.gsDelay*1000UL;
+  }
+}
 void gensetSeen(bool found){
-  // Trigger/re-arm state machine. Detection always runs so the indicator
-  // LED works even when the automatic action is disabled; only the IR send
-  // is gated on the mode.
-  bool armed = (cfg.gsMode=="off" || cfg.gsMode=="eco");
+  // Edge-triggered on appear/disappear, so it fires once per transition and
+  // works repeatedly as the generator and grid are cycled. Detection always
+  // runs (for the indicator LED); only the IR send is gated on the modes.
   if(found){
     gsMiss=0;
-    if(!gsPresent){                                  // generator just came on
+    if(!gsPresent){                                  // generator just came ON
       gsPresent=true; statePubQueued=true;
-      if(armed && !gsTriggered && LittleFS.exists(irPath(cfg.gsMode))){
-        pendingSend=cfg.gsMode;
-        sendAt=millis()+cfg.gsDelay*1000UL;
-        gsTriggered=true;
-      }
+      gensetFire(cfg.gsMode);
     }
-  } else if(gsPresent && ++gsMiss>=2){               // gone for 2 scans -> re-arm
-    gsPresent=false; gsTriggered=false; gsMiss=0; statePubQueued=true;
+  } else if(gsPresent && ++gsMiss>=2){               // gone for 2 scans -> OFF
+    gsPresent=false; gsMiss=0; statePubQueued=true;
+    gensetFire(cfg.gsOffMode);
   }
 }
 
@@ -720,6 +726,7 @@ void publishState(){
   d["codes"]["eco"]=LittleFS.exists(irPath("eco"));
   d["genset"]["detected"]=gsPresent;               // full genset config so the
   d["genset"]["mode"]=cfg.gsMode;                  // personal link can edit it
+  d["genset"]["offMode"]=cfg.gsOffMode;
   d["genset"]["delay"]=cfg.gsDelay;
   d["genset"]["ssid"]=cfg.gsSsid;
   d["time"]["valid"]=timeValid;

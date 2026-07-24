@@ -84,12 +84,22 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
 
 <section>
   <h2 data-k="genTitle"></h2>
+  <label data-k="gsOnHdr" style="font-weight:700;color:var(--txt);margin-bottom:6px"></label>
   <div class="radio"><input type="radio" name="gs" id="gs_dis" value="disabled">
     <label for="gs_dis" style="margin:0" data-k="gsDis"></label></div>
   <div class="radio"><input type="radio" name="gs" id="gs_off" value="off">
     <label for="gs_off" style="margin:0" data-k="gsOff"></label></div>
   <div class="radio"><input type="radio" name="gs" id="gs_eco" value="eco">
     <label for="gs_eco" style="margin:0" data-k="gsEco"></label></div>
+  <label data-k="gsOffHdr" style="font-weight:700;color:var(--txt);margin:10px 0 6px"></label>
+  <div class="radio"><input type="radio" name="gso" id="gso_dis" value="disabled">
+    <label for="gso_dis" style="margin:0" data-k="gsDis"></label></div>
+  <div class="radio"><input type="radio" name="gso" id="gso_on" value="on">
+    <label for="gso_on" style="margin:0" data-k="gsOn"></label></div>
+  <div class="radio"><input type="radio" name="gso" id="gso_off" value="off">
+    <label for="gso_off" style="margin:0" data-k="gsOff"></label></div>
+  <div class="radio"><input type="radio" name="gso" id="gso_eco" value="eco">
+    <label for="gso_eco" style="margin:0" data-k="gsEco"></label></div>
   <label data-k="gsDelay"></label>
   <input id="g_delay" type="number" min="0" max="3600" value="3" inputmode="numeric">
   <button style="width:100%" onclick="saveGenset()" data-k="save"></button>
@@ -135,7 +145,8 @@ online:'Online',offline:'Offline',det:'Running',nodet:'Off',
 sent:'Command sent.',saved:'Saved.',err:'Error — try again.',
 seen:'Last update: ',never:'Device has not connected yet.',
 offline2:'The device is offline. Changes will apply when it reconnects.',
-genTitle:'AutoGenset',gsDis:'Disabled',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
+genTitle:'AutoGenset',gsDis:'Disabled',gsOn:'Turn AC ON',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
+gsOnHdr:'When the generator turns ON:',gsOffHdr:'When the generator turns OFF:',
 gsDelay:'Delay before sending (seconds)',
 schedules:'Schedules',action:'Action',at:'Time',days:'Days',add:'Add schedule',
 none:'No schedules yet.',pickDay:'Pick at least one day.',
@@ -148,7 +159,8 @@ online:'متصل',offline:'غير متصل',det:'تعمل',nodet:'متوقفة',
 sent:'تم إرسال الأمر.',saved:'تم الحفظ.',err:'خطأ — حاول مجدداً.',
 seen:'آخر تحديث: ',never:'الجهاز لم يتصل بعد.',
 offline2:'الجهاز غير متصل. ستُطبَّق التغييرات عند عودته للاتصال.',
-genTitle:'كشف المولّدة تلقائياً',gsDis:'معطَّل',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
+genTitle:'كشف المولّدة تلقائياً',gsDis:'معطَّل',gsOn:'تشغيل المكيف',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
+gsOnHdr:'عند تشغيل المولّدة:',gsOffHdr:'عند إطفاء المولّدة:',
 gsDelay:'التأخير قبل الإرسال (بالثواني)',
 schedules:'الجدولة',action:'الإجراء',at:'الوقت',days:'الأيام',add:'إضافة جدولة',
 none:'لا توجد جدولات بعد.',pickDay:'اختر يوماً واحداً على الأقل.',
@@ -197,6 +209,7 @@ var x=document.createElement('button');x.className='del';x.textContent='×';
 x.onclick=function(){delSched(s.id)};d.appendChild(x);sl.appendChild(d)});
 if(first){first=false;
 var el=$('gs_'+(g.mode=='off'?'off':g.mode=='eco'?'eco':'dis'));if(el)el.checked=true;
+var om=g.offMode,oe=$('gso_'+(om=='on'?'on':om=='off'?'off':om=='eco'?'eco':'dis'));if(oe)oe.checked=true;
 if(g.delay!=null)$('g_delay').value=g.delay;
 if(tt.tz)$('t_tz').value=tt.tz;
 $('tm_ntp').checked=tt.ntp!==false;$('tm_man').checked=tt.ntp===false;manualBox()}}
@@ -206,7 +219,8 @@ headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r
 
 async function cmd(b){toast(await post({a:'send',btn:b})?t('sent'):t('err'))}
 async function saveGenset(){var m=document.querySelector('input[name="gs"]:checked').value;
-toast(await post({a:'genset',mode:m,delay:Math.max(0,parseInt($('g_delay').value)||0),ssid:(ST.genset&&ST.genset.ssid)||'GENSET_ACTIVE'})?t('saved'):t('err'))}
+var om=document.querySelector('input[name="gso"]:checked').value;
+toast(await post({a:'genset',mode:m,offMode:om,delay:Math.max(0,parseInt($('g_delay').value)||0),ssid:(ST.genset&&ST.genset.ssid)||'GENSET_ACTIVE'})?t('saved'):t('err'))}
 async function addSched(){if(!selDays.length){toast(t('pickDay'));return}
 var tm=$('s_time').value.split(':');
 if(await post({a:'sched_add',action:$('s_act').value,hour:+tm[0],min:+tm[1],days:selDays})){
