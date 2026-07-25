@@ -58,6 +58,8 @@ padding:10px 0;border-bottom:1px solid var(--line);font-size:16px}
 .kv span:first-child{color:var(--mut)}
 .radio{display:flex;align-items:center;gap:9px;margin-bottom:11px;font-size:16px}
 .radio input{width:auto;margin:0}
+.chk{display:flex;align-items:center;gap:9px;margin:8px 0 12px;font-size:14px;color:var(--txt)}
+.chk input{width:auto;margin:0;transform:scale(1.2)}
 .desc{font-size:15px;color:var(--mut);margin:0 0 10px;line-height:1.5}
 .linkrow{display:flex;gap:8px}
 .linkrow input{direction:ltr;text-align:left;font-size:14px;margin-bottom:0}
@@ -134,6 +136,7 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
       <label for="gso_eco" style="margin:0" data-k="gsEco"></label></div>
     <label data-k="gsDelay"></label>
     <input id="g_delay" type="number" min="0" max="3600" value="3" inputmode="numeric">
+    <label class="chk"><input type="checkbox" id="g_ecoon"><span data-k="ecoOn"></span></label>
     <label data-k="gsSsid"></label>
     <input id="g_ssid" maxlength="32" value="GENSET_ACTIVE">
     <button style="width:100%" onclick="gsSave()" data-k="save"></button>
@@ -222,6 +225,7 @@ genset:'AutoGenset',
 gsDesc:"When the generator's Wi-Fi network appears (neighborhood genset switched on), the device automatically sends a command to the AC.",
 gsDis:'Disabled',gsOn:'Turn AC ON',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
 gsOnHdr:'When the generator turns ON:',gsOffHdr:'When the generator turns OFF:',
+ecoOn:'ECO: turn the AC on first, then switch to ECO (needed on most units)',
 gsDelay:'Delay before sending (seconds)',gsSsid:'Generator network name',
 gsDet:'Generator detected',gsNo:'Not detected',
 delayS:['3 seconds','5 seconds','10 seconds','15 seconds','30 seconds','1 minute','2 minutes','5 minutes'],
@@ -257,6 +261,7 @@ genset:'كشف المولّدة تلقائياً',
 gsDesc:'عند ظهور شبكة واي فاي المولّدة (تشغيل مولّدة الحي)، يرسل الجهاز أمراً للمكيف تلقائياً.',
 gsDis:'معطَّل',gsOn:'تشغيل المكيف',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
 gsOnHdr:'عند تشغيل المولّدة:',gsOffHdr:'عند إطفاء المولّدة:',
+ecoOn:'الوضع الاقتصادي: شغّل المكيف أولاً ثم حوّله للاقتصادي (لازم لأغلب المكيفات)',
 gsDelay:'التأخير قبل الإرسال (بالثواني)',gsSsid:'اسم شبكة المولّدة',
 gsDet:'تم كشف المولّدة',gsNo:'غير مكشوفة',
 delayS:['٣ ثوانٍ','٥ ثوانٍ','١٠ ثوانٍ','١٥ ثانية','٣٠ ثانية','دقيقة واحدة','دقيقتان','٥ دقائق'],
@@ -339,6 +344,7 @@ $('tm_ntp').checked=!!tt.ntp;$('tm_man').checked=!tt.ntp;manualBox();
 var g=ST.genset||{};
 var el=$('gs_'+(g.mode=='off'?'off':g.mode=='eco'?'eco':'dis'));if(el)el.checked=true;
 var om=g.offMode,oe=$('gso_'+(om=='on'?'on':om=='off'?'off':om=='eco'?'eco':'dis'));if(oe)oe.checked=true;
+$('g_ecoon').checked=!!g.ecoOn;
 if(g.delay!=null)$('g_delay').value=g.delay;
 if(g.ssid)$('g_ssid').value=g.ssid;
 wScan(1)}
@@ -408,7 +414,7 @@ async function gsSave(){
 var m=document.querySelector('input[name="gs"]:checked').value;
 var om=document.querySelector('input[name="gso"]:checked').value;
 try{var r=await fetch('/api/genset',{method:'POST',body:JSON.stringify(
-{mode:m,offMode:om,delay:Math.max(0,parseInt($('g_delay').value)||0),ssid:$('g_ssid').value||'GENSET_ACTIVE'})});
+{mode:m,offMode:om,ecoOn:$('g_ecoon').checked,delay:Math.max(0,parseInt($('g_delay').value)||0),ssid:$('g_ssid').value||'GENSET_ACTIVE'})});
 toast(r.ok?t('saved'):t('err'));setTimeout(refresh,500)}catch(e){toast(t('err'))}}
 
 function copyLink(){var i=$('rlink');i.select();i.setSelectionRange(0,200);

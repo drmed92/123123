@@ -143,6 +143,9 @@ struct Config {
   // "disabled"; both fire after gsDelay seconds.
   String gsMode = "disabled", gsOffMode = "disabled", gsSsid = "GENSET_ACTIVE";
   uint16_t gsDelay = 3;
+  // ECO on most AC remotes only switches mode while the unit is ON. If set,
+  // any ECO send is preceded by an ON, then ECO 1.5 s later.
+  bool ecoNeedsOn = false;
   uint8_t gsChannel = 6;   // emitter's Wi-Fi channel; auto-learned from full sweeps
 } cfg;
 
@@ -166,6 +169,9 @@ bool     lastCapOvf    = false;
 uint16_t capSeq        = 0;      // ++ on every saved capture; UI detects a NEW one
 String   pendingSend   = "";     // queued transmit (non-blocking delay)
 uint32_t sendAt        = 0;
+String   pendingSend2  = "";     // 2nd step (ECO after a power-on), if any
+uint32_t sendAt2       = 0;
+const uint32_t ECO_ON_GAP_MS = 1500;   // ON -> ECO gap when ecoNeedsOn
 
 // AutoGenset runtime state
 bool     gsPresent     = false;  // generator network currently visible
@@ -235,6 +241,7 @@ void saveConfig(){
   d["ssid"]=cfg.ssid; d["pass"]=cfg.pass; d["tz"]=cfg.tz; d["ntp"]=cfg.ntp;
   d["gsMode"]=cfg.gsMode; d["gsOffMode"]=cfg.gsOffMode;
   d["gsSsid"]=cfg.gsSsid; d["gsDelay"]=cfg.gsDelay; d["gsChannel"]=cfg.gsChannel;
+  d["ecoOn"]=cfg.ecoNeedsOn;
   File f=LittleFS.open("/config.json","w"); if(f){ serializeJson(d,f); f.close(); }
 }
 void loadConfig(){
@@ -243,7 +250,7 @@ void loadConfig(){
     cfg.ssid=d["ssid"]|""; cfg.pass=d["pass"]|""; cfg.tz=d["tz"]|"Asia/Baghdad"; cfg.ntp=d["ntp"]|true;
     cfg.gsMode=d["gsMode"]|"disabled"; cfg.gsOffMode=d["gsOffMode"]|"disabled";
     cfg.gsSsid=d["gsSsid"]|"GENSET_ACTIVE"; cfg.gsDelay=d["gsDelay"]|3;
-    cfg.gsChannel=d["gsChannel"]|6;
+    cfg.gsChannel=d["gsChannel"]|6; cfg.ecoNeedsOn=d["ecoOn"]|false;
     provisioned=true;
   }
   f.close();
@@ -386,6 +393,7 @@ void handleStatus(){
   d["genset"]["offMode"]=cfg.gsOffMode;
   d["genset"]["ssid"]=cfg.gsSsid;
   d["genset"]["delay"]=cfg.gsDelay;
+  d["genset"]["ecoOn"]=cfg.ecoNeedsOn;
   d["genset"]["detected"]=gsPresent;
 
   d["lastCapture"]["btn"]=lastCapBtn;
@@ -417,7 +425,7 @@ void handleRecord(){
 void handleSend(){
   String b=server.arg("btn");
   if(!validBtn(b) || !LittleFS.exists(irPath(b))){ sendJson(400,"{\"ok\":false}"); return; }
-  pendingSend=b; sendAt=millis();          // immediate; loop() fires it
+  scheduleSend(b, millis());               // immediate; loop() fires it
   sendJson(200, "{\"ok\":true}");
 }
 
@@ -454,6 +462,7 @@ void applyGensetCfg(JsonDocument& d){
   cfg.gsDelay=d["delay"]|3;
   cfg.gsSsid=(const char*)(d["ssid"]|"GENSET_ACTIVE");
   if(!cfg.gsSsid.length()) cfg.gsSsid="GENSET_ACTIVE";
+  if(d["ecoOn"].is<bool>()) cfg.ecoNeedsOn=d["ecoOn"];
   saveConfig();
   gsPresent=false; gsMiss=0;                       // re-arm with new settings
 }
@@ -535,9 +544,26 @@ void captureIR(){
   if(recordTarget!="" && (int32_t)(millis()-recordDeadline)>0) recordTarget=""; // timed out
 }
 
+// Central send scheduler. Handles the "ECO needs power-on first" case by
+// chaining ON now, then ECO ECO_ON_GAP_MS later. `at` is the millis() the
+// (first) transmit should happen.
+void scheduleSend(const String& b, uint32_t at){
+  pendingSend2="";                                 // drop any stale chain
+  if(b=="eco" && cfg.ecoNeedsOn && LittleFS.exists(irPath("on"))){
+    pendingSend="on";  sendAt=at;
+    pendingSend2="eco"; sendAt2=at+ECO_ON_GAP_MS;
+  } else {
+    pendingSend=b; sendAt=at;
+  }
+}
+
 void firePending(){
   if(pendingSend!="" && (int32_t)(millis()-sendAt)>=0){
     String b=pendingSend; pendingSend="";
+    sendIR(b);
+  }
+  if(pendingSend2!="" && (int32_t)(millis()-sendAt2)>=0){
+    String b=pendingSend2; pendingSend2="";
     sendIR(b);
   }
 }
@@ -555,14 +581,14 @@ void checkSchedules(){
     if((int)s["hour"]!=lt->tm_hour || (int)s["min"]!=lt->tm_min) continue;
     bool today=false; for(JsonVariant v:s["days"].as<JsonArray>()) if((int)v==lt->tm_wday){ today=true; break; }
     if(!today) continue;
-    String b=(const char*)(s["action"]|"on");   // "on"/"off"
-    if(LittleFS.exists(irPath(b))){ pendingSend=b; sendAt=millis(); }
+    String b=(const char*)(s["action"]|"on");   // "on"/"off"/"eco"
+    if(LittleFS.exists(irPath(b))){ scheduleSend(b, millis()); }
   }
 }
 
 void gensetFire(const String& m){                   // queue m's code after gsDelay
   if(validBtn(m) && LittleFS.exists(irPath(m))){
-    pendingSend=m; sendAt=millis()+cfg.gsDelay*1000UL;
+    scheduleSend(m, millis()+cfg.gsDelay*1000UL);
   }
 }
 void gensetSeen(bool found){
@@ -702,14 +728,14 @@ void mqttCallback(char* topic, byte* payload, unsigned int len){
   JsonDocument d;
   if(deserializeJson(d,p)){                        // not JSON: treat as a button
     String b=p; b.trim();
-    if(validBtn(b) && LittleFS.exists(irPath(b))){ pendingSend=b; sendAt=millis(); }
+    if(validBtn(b) && LittleFS.exists(irPath(b))){ scheduleSend(b, millis()); }
     statePubQueued=true; return;
   }
   String a=(const char*)(d["a"]|"");
   if(a=="" && d["btn"].is<const char*>()) a="send";
   if(a=="send"){
     String b=(const char*)(d["btn"]|"");
-    if(validBtn(b) && LittleFS.exists(irPath(b))){ pendingSend=b; sendAt=millis(); }
+    if(validBtn(b) && LittleFS.exists(irPath(b))){ scheduleSend(b, millis()); }
   } else if(a=="genset"){ applyGensetCfg(d); }
   else if(a=="time"){ applyTimeCfg(d); }
   else if(a=="sched_add"){ schedAdd(d); }
@@ -728,6 +754,7 @@ void publishState(){
   d["genset"]["mode"]=cfg.gsMode;                  // personal link can edit it
   d["genset"]["offMode"]=cfg.gsOffMode;
   d["genset"]["delay"]=cfg.gsDelay;
+  d["genset"]["ecoOn"]=cfg.ecoNeedsOn;
   d["genset"]["ssid"]=cfg.gsSsid;
   d["time"]["valid"]=timeValid;
   d["time"]["epoch"]=(uint32_t)time(nullptr);
