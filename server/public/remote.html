@@ -38,6 +38,8 @@ label{display:block;font-size:13.5px;color:var(--mut);margin-bottom:4px}
 .inline{display:flex;gap:8px}.inline>*{flex:1}
 .radio{display:flex;align-items:center;gap:9px;margin-bottom:11px;font-size:16px}
 .radio input{width:auto;margin:0;transform:scale(1.2)}
+.chk{display:flex;align-items:center;gap:9px;margin:2px 0 12px;font-size:14px;color:var(--txt)}
+.chk input{width:auto;margin:0;transform:scale(1.2)}
 .days{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
 .day{flex:1;min-width:38px;padding:9px 0;text-align:center;font-size:13.5px;font-weight:600;
 border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--mut);
@@ -102,6 +104,7 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
     <label for="gso_eco" style="margin:0" data-k="gsEco"></label></div>
   <label data-k="gsDelay"></label>
   <input id="g_delay" type="number" min="0" max="3600" value="3" inputmode="numeric">
+  <label class="chk"><input type="checkbox" id="g_ecoon"><span data-k="ecoOn"></span></label>
   <button style="width:100%" onclick="saveGenset()" data-k="save"></button>
 </section>
 
@@ -147,6 +150,7 @@ seen:'Last update: ',never:'Device has not connected yet.',
 offline2:'The device is offline. Changes will apply when it reconnects.',
 genTitle:'AutoGenset',gsDis:'Disabled',gsOn:'Turn AC ON',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
 gsOnHdr:'When the generator turns ON:',gsOffHdr:'When the generator turns OFF:',
+ecoOn:'ECO: turn the AC on first, then switch to ECO (needed on most units)',
 gsDelay:'Delay before sending (seconds)',
 schedules:'Schedules',action:'Action',at:'Time',days:'Days',add:'Add schedule',
 none:'No schedules yet.',pickDay:'Pick at least one day.',
@@ -161,6 +165,7 @@ seen:'آخر تحديث: ',never:'الجهاز لم يتصل بعد.',
 offline2:'الجهاز غير متصل. ستُطبَّق التغييرات عند عودته للاتصال.',
 genTitle:'كشف المولّدة تلقائياً',gsDis:'معطَّل',gsOn:'تشغيل المكيف',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
 gsOnHdr:'عند تشغيل المولّدة:',gsOffHdr:'عند إطفاء المولّدة:',
+ecoOn:'الوضع الاقتصادي: شغّل المكيف أولاً ثم حوّله للاقتصادي (لازم لأغلب المكيفات)',
 gsDelay:'التأخير قبل الإرسال (بالثواني)',
 schedules:'الجدولة',action:'الإجراء',at:'الوقت',days:'الأيام',add:'إضافة جدولة',
 none:'لا توجد جدولات بعد.',pickDay:'اختر يوماً واحداً على الأقل.',
@@ -210,6 +215,7 @@ x.onclick=function(){delSched(s.id)};d.appendChild(x);sl.appendChild(d)});
 if(first){first=false;
 var el=$('gs_'+(g.mode=='off'?'off':g.mode=='eco'?'eco':'dis'));if(el)el.checked=true;
 var om=g.offMode,oe=$('gso_'+(om=='on'?'on':om=='off'?'off':om=='eco'?'eco':'dis'));if(oe)oe.checked=true;
+$('g_ecoon').checked=!!g.ecoOn;
 if(g.delay!=null)$('g_delay').value=g.delay;
 if(tt.tz)$('t_tz').value=tt.tz;
 $('tm_ntp').checked=tt.ntp!==false;$('tm_man').checked=tt.ntp===false;manualBox()}}
@@ -220,7 +226,7 @@ headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r
 async function cmd(b){toast(await post({a:'send',btn:b})?t('sent'):t('err'))}
 async function saveGenset(){var m=document.querySelector('input[name="gs"]:checked').value;
 var om=document.querySelector('input[name="gso"]:checked').value;
-toast(await post({a:'genset',mode:m,offMode:om,delay:Math.max(0,parseInt($('g_delay').value)||0),ssid:(ST.genset&&ST.genset.ssid)||'GENSET_ACTIVE'})?t('saved'):t('err'))}
+toast(await post({a:'genset',mode:m,offMode:om,ecoOn:$('g_ecoon').checked,delay:Math.max(0,parseInt($('g_delay').value)||0),ssid:(ST.genset&&ST.genset.ssid)||'GENSET_ACTIVE'})?t('saved'):t('err'))}
 async function addSched(){if(!selDays.length){toast(t('pickDay'));return}
 var tm=$('s_time').value.split(':');
 if(await post({a:'sched_add',action:$('s_act').value,hour:+tm[0],min:+tm[1],days:selDays})){

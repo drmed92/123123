@@ -109,6 +109,7 @@ en:{
  yes:'Yes',no:'No',
  gAction:'When the generator turns ON:',gActionOff:'When the generator turns OFF:',
  gsDis:'Disabled',gOn:'Turn the AC ON',gOff:'Turn the AC OFF',gEco:'Switch to ECO',
+ ecoOn:'ECO: turn the AC on first, then ECO (needed on most units)',
  gDelay:'Delay before sending (seconds)',
  gSeen:'✓ Generator network is visible now',
  gNotSeen:'Generator network is not visible right now (that’s OK if the generator is off).',
@@ -152,6 +153,7 @@ ar:{
  yes:'نعم',no:'لا',
  gAction:'عند تشغيل المولّدة:',gActionOff:'عند إطفاء المولّدة:',
  gsDis:'معطَّل',gOn:'تشغيل المكيف',gOff:'إطفاء المكيف',gEco:'التحويل للوضع الاقتصادي',
+ ecoOn:'الاقتصادي: شغّل المكيف أولاً ثم حوّله للاقتصادي (لازم لأغلب المكيفات)',
  gDelay:'التأخير قبل الإرسال (بالثواني)',
  gSeen:'✓ شبكة المولّدة مرئية الآن',
  gNotSeen:'شبكة المولّدة غير مرئية حالياً (هذا طبيعي إذا كانت المولّدة مطفأة).',
@@ -317,6 +319,7 @@ rb('gao','gao_dis','disabled',t('gsDis'),true)+rb('gao','gao_on','on',t('gOn'))+
 rb('gao','gao_off','off',t('gOff'))+rb('gao','gao_eco','eco',t('gEco'))+
 '<label>'+t('gDelay')+'</label>'+
 '<input id="gdel" type="number" min="0" max="3600" value="3" inputmode="numeric">'+
+'<label class="radio" style="font-size:14px"><input type="checkbox" id="gecoon" style="width:auto;transform:scale(1.2)"> '+t('ecoOn')+'</label>'+
 '<div class="st" id="gseen"></div>'+
 '<button class="pri" onclick="gensetSave()">'+t('gSave')+'</button>'+
 '<button class="ghost" onclick="showGenset()">'+t('back')+'</button>');
@@ -329,7 +332,7 @@ async function gensetSave(){
 gsChoice=$('ga_eco').checked?'eco':'off';
 var om=document.querySelector('input[name="gao"]:checked').value;
 try{await fetch('/api/genset',{method:'POST',body:JSON.stringify(
-{mode:gsChoice,offMode:om,delay:Math.max(0,parseInt($('gdel').value)||0),ssid:'GENSET_ACTIVE'})})}catch(e){}
+{mode:gsChoice,offMode:om,ecoOn:$('gecoon').checked,delay:Math.max(0,parseInt($('gdel').value)||0),ssid:'GENSET_ACTIVE'})})}catch(e){}
 go('done')}
 
 /* ---------- done ---------- */
