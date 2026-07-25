@@ -183,7 +183,7 @@ app.get('/api/r/:code/state', rateLimit, (req, res) => {
 // full action {a:...} mirroring the device API (send/genset/time/sched_add/
 // sched_del) so the personal link has portal parity. Wi-Fi is intentionally
 // not relayable (see firmware note). The device validates everything.
-const ACTIONS = ['send', 'genset', 'time', 'sched_add', 'sched_del'];
+const ACTIONS = ['send', 'genset', 'time', 'sched_add', 'sched_del', 'led'];
 app.post('/api/r/:code/cmd', rateLimit, (req, res) => {
   findByCode(req, res, (id) => {
     const body = req.body || {};

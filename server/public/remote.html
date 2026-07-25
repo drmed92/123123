@@ -140,6 +140,10 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
   <button style="width:100%" onclick="saveTime()" data-k="apply"></button>
 </section>
 
+<section>
+  <label class="chk"><input type="checkbox" id="ledon" onchange="saveLed()"><span data-k="ledOn"></span></label>
+</section>
+
 </div><div id="toast"></div><script>
 var D={
 en:{device:'Air conditioner',genset:'Generator',devtime:'Device time',
@@ -151,6 +155,7 @@ offline2:'The device is offline. Changes will apply when it reconnects.',
 genTitle:'AutoGenset',gsDis:'Disabled',gsOn:'Turn AC ON',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
 gsOnHdr:'When the generator turns ON:',gsOffHdr:'When the generator turns OFF:',
 ecoOn:'ECO: turn the AC on first, then switch to ECO (needed on most units)',
+ledOn:'Blink the device LED when an IR command is sent',
 gsDelay:'Delay before sending (seconds)',
 schedules:'Schedules',action:'Action',at:'Time',days:'Days',add:'Add schedule',
 none:'No schedules yet.',pickDay:'Pick at least one day.',
@@ -166,6 +171,7 @@ offline2:'الجهاز غير متصل. ستُطبَّق التغييرات عن
 genTitle:'كشف المولّدة تلقائياً',gsDis:'معطَّل',gsOn:'تشغيل المكيف',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
 gsOnHdr:'عند تشغيل المولّدة:',gsOffHdr:'عند إطفاء المولّدة:',
 ecoOn:'الوضع الاقتصادي: شغّل المكيف أولاً ثم حوّله للاقتصادي (لازم لأغلب المكيفات)',
+ledOn:'وميض مؤشر الجهاز الضوئي عند إرسال أمر',
 gsDelay:'التأخير قبل الإرسال (بالثواني)',
 schedules:'الجدولة',action:'الإجراء',at:'الوقت',days:'الأيام',add:'إضافة جدولة',
 none:'لا توجد جدولات بعد.',pickDay:'اختر يوماً واحداً على الأقل.',
@@ -216,6 +222,7 @@ if(first){first=false;
 var el=$('gs_'+(g.mode=='off'?'off':g.mode=='eco'?'eco':'dis'));if(el)el.checked=true;
 var om=g.offMode,oe=$('gso_'+(om=='on'?'on':om=='off'?'off':om=='eco'?'eco':'dis'));if(oe)oe.checked=true;
 $('g_ecoon').checked=!!g.ecoOn;
+$('ledon').checked=ST.ledOn!==false;
 if(g.delay!=null)$('g_delay').value=g.delay;
 if(tt.tz)$('t_tz').value=tt.tz;
 $('tm_ntp').checked=tt.ntp!==false;$('tm_man').checked=tt.ntp===false;manualBox()}}
@@ -224,6 +231,7 @@ async function post(body){try{var r=await fetch('/api/r/'+CODE+'/cmd',{method:'P
 headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r.ok}catch(e){return false}}
 
 async function cmd(b){toast(await post({a:'send',btn:b})?t('sent'):t('err'))}
+async function saveLed(){toast(await post({a:'led',ledOn:$('ledon').checked})?t('saved'):t('err'))}
 async function saveGenset(){var m=document.querySelector('input[name="gs"]:checked').value;
 var om=document.querySelector('input[name="gso"]:checked').value;
 toast(await post({a:'genset',mode:m,offMode:om,ecoOn:$('g_ecoon').checked,delay:Math.max(0,parseInt($('g_delay').value)||0),ssid:(ST.genset&&ST.genset.ssid)||'GENSET_ACTIVE'})?t('saved'):t('err'))}

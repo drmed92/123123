@@ -147,6 +147,7 @@ struct Config {
   // ECO on most AC remotes only switches mode while the unit is ON. If set,
   // any ECO send is preceded by an ON, then ECO 1.5 s later.
   bool ecoNeedsOn = false;
+  bool ledEnabled = true;    // heartbeat LED on IR send
   uint8_t gsChannel = 6;   // emitter's Wi-Fi channel; auto-learned from full sweeps
 } cfg;
 
@@ -173,6 +174,17 @@ uint32_t sendAt        = 0;
 String   pendingSend2  = "";     // 2nd step (ECO after a power-on), if any
 uint32_t sendAt2       = 0;
 const uint32_t ECO_ON_GAP_MS = 1500;   // ON -> ECO gap when ecoNeedsOn
+
+// Status-LED runtime
+bool     ledActive     = false;
+uint32_t ledT0         = 0;
+
+// ---- Status LED: a smooth heartbeat fade after every IR send ----
+#define LED_PIN            LED_BUILTIN     // GPIO2 (active-low) on D1 mini / ESP-12E
+const bool     LED_ACTIVE_LOW = true;
+const uint16_t LED_PULSE_MS   = 1250;      // duration of one fade in+out
+const uint8_t  LED_PULSES     = 1;         // heartbeats per IR send
+const uint16_t LED_MAX        = 1023;      // PWM range / peak brightness (0..1023)
 
 // AutoGenset runtime state
 bool     gsPresent     = false;  // generator network currently visible
@@ -242,7 +254,7 @@ void saveConfig(){
   d["ssid"]=cfg.ssid; d["pass"]=cfg.pass; d["tz"]=cfg.tz; d["ntp"]=cfg.ntp;
   d["gsMode"]=cfg.gsMode; d["gsOffMode"]=cfg.gsOffMode;
   d["gsSsid"]=cfg.gsSsid; d["gsDelay"]=cfg.gsDelay; d["gsChannel"]=cfg.gsChannel;
-  d["ecoOn"]=cfg.ecoNeedsOn;
+  d["ecoOn"]=cfg.ecoNeedsOn; d["ledOn"]=cfg.ledEnabled;
   File f=LittleFS.open("/config.json","w"); if(f){ serializeJson(d,f); f.close(); }
 }
 void loadConfig(){
@@ -252,6 +264,7 @@ void loadConfig(){
     cfg.gsMode=d["gsMode"]|"disabled"; cfg.gsOffMode=d["gsOffMode"]|"disabled";
     cfg.gsSsid=d["gsSsid"]|"GENSET_ACTIVE"; cfg.gsDelay=d["gsDelay"]|3;
     cfg.gsChannel=d["gsChannel"]|6; cfg.ecoNeedsOn=d["ecoOn"]|false;
+    cfg.ledEnabled=d["ledOn"]|true;
     provisioned=true;
   }
   f.close();
@@ -390,6 +403,8 @@ void handleStatus(){
   d["time"]["ntp"]=cfg.ntp;
   d["time"]["tz"]=cfg.tz;
 
+  d["ledOn"]=cfg.ledEnabled;
+
   d["genset"]["mode"]=cfg.gsMode;
   d["genset"]["offMode"]=cfg.gsOffMode;
   d["genset"]["ssid"]=cfg.gsSsid;
@@ -455,6 +470,9 @@ void applyTimeCfg(JsonDocument& d){
   if(cfg.ntp){ timeValid=false; applyTime(); }
   else if(d["iso"].is<const char*>()) setManualTime(d["iso"]);
 }
+void applyLedCfg(JsonDocument& d){
+  if(d["ledOn"].is<bool>()){ cfg.ledEnabled=d["ledOn"]; saveConfig(); }
+}
 void applyGensetCfg(JsonDocument& d){
   String m=(const char*)(d["mode"]|"disabled");
   cfg.gsMode=validBtn(m) ? m : "disabled";
@@ -491,6 +509,10 @@ void handleTime(){
 void handleGenset(){
   JsonDocument d; if(!bodyJson(d)){ sendJson(400,"{\"ok\":false}"); return; }
   applyGensetCfg(d); sendJson(200,"{\"ok\":true}");
+}
+void handleLed(){
+  JsonDocument d; if(!bodyJson(d)){ sendJson(400,"{\"ok\":false}"); return; }
+  applyLedCfg(d); sendJson(200,"{\"ok\":true}");
 }
 void handleSchedGet(){
   File f=LittleFS.open("/sched.json","r");
@@ -558,14 +580,28 @@ void scheduleSend(const String& b, uint32_t at){
   }
 }
 
+/* ------------------------------- status LED ----------------------------- */
+void ledWrite(uint16_t v){                          // v: 0..LED_MAX brightness
+  analogWrite(LED_PIN, LED_ACTIVE_LOW ? (LED_MAX - v) : v);
+}
+void ledInit(){ pinMode(LED_PIN,OUTPUT); analogWriteRange(LED_MAX); ledWrite(0); }
+void ledStart(){ if(cfg.ledEnabled){ ledActive=true; ledT0=millis(); } }
+void ledTask(){                                     // non-blocking; call from loop
+  if(!ledActive) return;
+  uint32_t el=millis()-ledT0, total=(uint32_t)LED_PULSE_MS*LED_PULSES;
+  if(el>=total){ ledActive=false; ledWrite(0); return; }
+  float ph=(el % LED_PULSE_MS)/(float)LED_PULSE_MS;  // 0..1 within a pulse
+  ledWrite((uint16_t)(sinf(ph*PI)*LED_MAX));         // smooth fade in then out
+}
+
 void firePending(){
   if(pendingSend!="" && (int32_t)(millis()-sendAt)>=0){
     String b=pendingSend; pendingSend="";
-    sendIR(b);
+    sendIR(b); ledStart();                            // "IR sent" heartbeat
   }
   if(pendingSend2!="" && (int32_t)(millis()-sendAt2)>=0){
     String b=pendingSend2; pendingSend2="";
-    sendIR(b);
+    sendIR(b); ledStart();
   }
 }
 
@@ -738,6 +774,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int len){
     String b=(const char*)(d["btn"]|"");
     if(validBtn(b) && LittleFS.exists(irPath(b))){ scheduleSend(b, millis()); }
   } else if(a=="genset"){ applyGensetCfg(d); }
+  else if(a=="led"){ applyLedCfg(d); }
   else if(a=="time"){ applyTimeCfg(d); }
   else if(a=="sched_add"){ schedAdd(d); }
   else if(a=="sched_del"){ schedDel((uint32_t)(d["id"]|0)); }
@@ -757,6 +794,7 @@ void publishState(){
   d["genset"]["delay"]=cfg.gsDelay;
   d["genset"]["ecoOn"]=cfg.ecoNeedsOn;
   d["genset"]["ssid"]=cfg.gsSsid;
+  d["ledOn"]=cfg.ledEnabled;
   d["time"]["valid"]=timeValid;
   d["time"]["epoch"]=(uint32_t)time(nullptr);
   d["time"]["ntp"]=cfg.ntp;
@@ -840,6 +878,7 @@ void setup(){
   connectSTA();
 
   irsend.begin();
+  ledInit();
   irrecv.setTolerance(kTolerancePct);
   irrecv.enableIRIn();
 
@@ -865,6 +904,7 @@ void setup(){
   server.on("/api/wifi",      HTTP_DELETE, handleWifiForget);
   server.on("/api/time",      HTTP_POST,   handleTime);
   server.on("/api/genset",    HTTP_POST,   handleGenset);
+  server.on("/api/led",       HTTP_POST,   handleLed);
   server.on("/api/schedule",  HTTP_GET,    handleSchedGet);
   server.on("/api/schedule",  HTTP_POST,   handleSchedPost);
   server.on("/api/schedule",  HTTP_DELETE, handleSchedDel);
@@ -881,6 +921,7 @@ void loop(){
   server.handleClient();
   captureIR();
   firePending();
+  ledTask();
   if(!timeValid && time(nullptr)>100000) timeValid=true;
   manageAP();
   checkSchedules();
