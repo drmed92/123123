@@ -49,8 +49,8 @@
 #define IR_TX_PIN   D2        // GPIO4  -> transistor base
 #define IR_RX_PIN   D5        // GPIO14 -> VS1838B OUT
 
-const char*  AP_SSID      = "ERemote";
-const char*  AP_PASS      = "44448888";    // WPA2; easy default, keeps neighbors out
+const char*  AP_SSID_BASE = "ERemote";     // actual SSID gets a per-device suffix
+const char*  AP_PASS      = "88888888";    // WPA2; easy default, keeps neighbors out
 const uint8_t AP_CHANNEL  = 6;
 
 // ---- Remote access (cloud) ----
@@ -134,6 +134,7 @@ struct Identity {
   uint8_t  claimed;
 } ident;
 String devId;            // "d" + chip id in hex; MQTT username + topic segment
+String apSsid = "ERemote"; // "ERemote" + 2 per-device chars, set in setup()
 
 // Config held in RAM
 struct Config {
@@ -294,7 +295,7 @@ void startAP(){
   // browser when the automatic captive popup doesn't appear.
   IPAddress apIP(4,4,4,4);
   WiFi.softAPConfig(apIP, apIP, IPAddress(255,255,255,0));
-  WiFi.softAP(AP_SSID, AP_PASS, AP_CHANNEL);
+  WiFi.softAP(apSsid.c_str(), AP_PASS, AP_CHANNEL);
   dnsServer.setTTL(0);                          // don't let phones cache answers
   dnsServer.start(DNS_PORT, "*", apIP);         // every hostname -> us
   apOn=true;
@@ -811,6 +812,10 @@ void setup(){
   EEPROM.begin(sizeof(Identity));
   loadIdentity();            // mints the device secret on very first boot
   devId = "d" + String(ESP.getChipId(), HEX);
+  { // per-device AP name: ERemote + last 2 chip-id hex chars, uppercase
+    char sx[8]; snprintf(sx, sizeof(sx), "%02X", ESP.getChipId() & 0xFF);
+    apSsid = String(AP_SSID_BASE) + sx;
+  }
   mqtt.setBufferSize(1024);   // room for state incl. schedules
 
   WiFi.persistent(false);
@@ -867,7 +872,7 @@ void setup(){
   server.onNotFound(handleNotFound);
   server.begin();
 
-  Serial.printf("AP: %s  IP: %s\n", AP_SSID, WiFi.softAPIP().toString().c_str());
+  Serial.printf("AP: %s  IP: %s\n", apSsid.c_str(), WiFi.softAPIP().toString().c_str());
 }
 
 /* --------------------------------- loop --------------------------------- */
