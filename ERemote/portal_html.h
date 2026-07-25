@@ -197,6 +197,7 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
 
 <section>
   <h2 data-k="advanced"></h2>
+  <label class="chk" style="margin-bottom:12px"><input type="checkbox" id="ledon" onchange="ledSave()"><span data-k="ledOn"></span></label>
   <button class="sec" style="width:100%;margin-bottom:10px"
     onclick="location.href='/?setup=1'" data-k="wizBtn"></button>
   <button class="danger" onclick="factory()" data-k="factory"></button>
@@ -232,6 +233,7 @@ delayS:['3 seconds','5 seconds','10 seconds','15 seconds','30 seconds','1 minute
 wifi:'Wi-Fi',status:'Status',conn:'Connected',noconn:'Not connected',
 ssid:'Wi-Fi name',pass:'Password',save:'Save',forget:'Forget network',
 rescan:'Refresh',otherNet:'Other network…',wizBtn:'Run setup wizard',
+ledOn:'Blink the LED when an IR command is sent',
 time:'Time & clock',devtime:'Device time',ntp:'Automatic (internet time)',
 manual:'Set manually',tz:'Time zone',apply:'Apply',
 baghdad:'Baghdad / Kuwait / Riyadh (GMT+3)',dubai:'Dubai (GMT+4)',
@@ -268,6 +270,7 @@ delayS:['٣ ثوانٍ','٥ ثوانٍ','١٠ ثوانٍ','١٥ ثانية','٣�
 wifi:'الواي فاي',status:'الحالة',conn:'متصل',noconn:'غير متصل',
 ssid:'اسم شبكة الواي فاي',pass:'كلمة المرور',save:'حفظ',forget:'نسيان الشبكة',
 rescan:'تحديث',otherNet:'شبكة أخرى…',wizBtn:'إعادة تشغيل معالج الإعداد',
+ledOn:'وميض المؤشر الضوئي عند إرسال أمر',
 time:'الوقت والساعة',devtime:'وقت الجهاز',ntp:'تلقائي (وقت الإنترنت)',
 manual:'ضبط يدوي',tz:'المنطقة الزمنية',apply:'تطبيق',
 baghdad:'بغداد / الكويت / الرياض (+3)',dubai:'دبي (+4)',
@@ -341,6 +344,7 @@ async function refresh(){try{var r=await fetch('/api/status');ST=await r.json();
 if(first){first=false;var tt=ST.time||{};
 if(tt.tz)$('t_tz').value=tt.tz;
 $('tm_ntp').checked=!!tt.ntp;$('tm_man').checked=!tt.ntp;manualBox();
+$('ledon').checked=ST.ledOn!==false;
 var g=ST.genset||{};
 var el=$('gs_'+(g.mode=='off'?'off':g.mode=='eco'?'eco':'dis'));if(el)el.checked=true;
 var om=g.offMode,oe=$('gso_'+(om=='on'?'on':om=='off'?'off':om=='eco'?'eco':'dis'));if(oe)oe.checked=true;
@@ -410,6 +414,8 @@ toast(r.ok?t('saved'):t('err'));setTimeout(refresh,4000)}catch(e){toast(t('err')
 async function wifiForget(){try{await fetch('/api/wifi',{method:'DELETE'});
 $('w_ssid').value='';$('w_pass').value='';toast(t('saved'));refresh()}catch(e){toast(t('err'))}}
 
+async function ledSave(){try{await fetch('/api/led',{method:'POST',
+body:JSON.stringify({ledOn:$('ledon').checked})});toast(t('saved'))}catch(e){toast(t('err'))}}
 async function gsSave(){
 var m=document.querySelector('input[name="gs"]:checked').value;
 var om=document.querySelector('input[name="gso"]:checked').value;
