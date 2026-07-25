@@ -76,6 +76,7 @@ border:1px solid var(--line);color:var(--txt);padding:12px 18px;border-radius:12
     <div class="acts"><button onclick="doSend('eco')" data-k="test"></button>
     <button class="sec" onclick="doRec('eco')" data-k="rec"></button></div></div>
   <label class="chk"><input type="checkbox" id="ecoon" onchange="saveCfg()"><span data-k="ecoOn"></span></label>
+  <label class="chk"><input type="checkbox" id="ledon" onchange="saveCfg()"><span data-k="ledOn"></span></label>
   <div class="msg" id="recmsg"></div>
 </section>
 
@@ -107,6 +108,7 @@ remote:'Remote buttons',on:'ON',off:'OFF',eco:'ECO',test:'Test',rec:'Record',
 recorded:'Recorded',empty:'Not recorded',recOk:'Recorded!',recFail:'Nothing received — try again.',
 recWait:'Point the remote at the sensor and press the button…',
 ecoOn:'ECO: turn the AC on first, then ECO (needed on most units)',
+ledOn:'Blink the LED when an IR command is sent',
 schedules:'Schedule',action:'Action',at:'Time',days:'Days',add:'Add schedule',
 none:'No schedules yet.',pickDay:'Pick at least one day.',
 powerT:'Power',sleepNote:'When you finish, the device sleeps to save battery and only wakes to run the schedule. The Wi-Fi turns off automatically after 5 minutes. Press the RST button to program again.',
@@ -118,6 +120,7 @@ remote:'أزرار الريموت',on:'تشغيل',off:'إطفاء',eco:'اقت�
 recorded:'مسجَّل',empty:'غير مسجَّل',recOk:'تم التسجيل!',recFail:'لم يصل شيء — حاول مجدداً.',
 recWait:'وجّه الريموت نحو الحساس واضغط الزر…',
 ecoOn:'الاقتصادي: شغّل المكيف أولاً ثم حوّله للاقتصادي (لازم لأغلب المكيفات)',
+ledOn:'وميض المؤشر الضوئي عند إرسال أمر',
 schedules:'الجدولة',action:'الإجراء',at:'الوقت',days:'الأيام',add:'إضافة جدولة',
 none:'لا توجد جدولات بعد.',pickDay:'اختر يوماً واحداً على الأقل.',
 powerT:'الطاقة',sleepNote:'عند الانتهاء ينام الجهاز لتوفير البطارية ولا يستيقظ إلا لتنفيذ الجدولة. ينطفئ الواي فاي تلقائياً بعد ٥ دقائق. اضغط زر RST لإعادة البرمجة.',
@@ -159,14 +162,16 @@ var days=(s.days||[]).map(function(i){return t('dayS')[i]}).join(' ');
 d.innerHTML='<div><b>'+t(s.action)+'</b> '+p2(s.hour)+':'+p2(s.min)+'<div class="meta">'+days+'</div></div>';
 var x=document.createElement('button');x.className='del';x.textContent='×';
 x.onclick=function(){delSched(s.id)};d.appendChild(x);sl.appendChild(d)});
-if(first){first=false;$('ecoon').checked=!!ST.ecoOn;if(ST.epoch)$('t_iso').value=isoLocal(ST.epoch)}}
+if(first){first=false;$('ecoon').checked=!!ST.ecoOn;$('ledon').checked=ST.ledOn!==false;
+if(ST.epoch)$('t_iso').value=isoLocal(ST.epoch)}}
 
 async function refresh(){try{var r=await fetch('/api/status');ST=await r.json();render()}catch(e){}}
 
 async function saveTime(){if(!$('t_iso').value){toast(t('err'));return}
 try{var r=await fetch('/api/time',{method:'POST',body:JSON.stringify({iso:$('t_iso').value})});
 toast(r.ok?t('saved'):t('err'));setTimeout(refresh,300)}catch(e){toast(t('err'))}}
-async function saveCfg(){try{await fetch('/api/cfg',{method:'POST',body:JSON.stringify({ecoOn:$('ecoon').checked})});
+async function saveCfg(){try{await fetch('/api/cfg',{method:'POST',
+body:JSON.stringify({ecoOn:$('ecoon').checked,ledOn:$('ledon').checked})});
 toast(t('saved'))}catch(e){toast(t('err'))}}
 async function doSend(b){if(!(ST&&ST.codes&&ST.codes[b])){toast(t('empty'));return}
 try{var r=await fetch('/api/send?btn='+b,{method:'POST'});toast(r.ok?t('sent'):t('err'))}catch(e){toast(t('err'))}}

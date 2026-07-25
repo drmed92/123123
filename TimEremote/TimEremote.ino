@@ -50,6 +50,13 @@ const uint8_t AP_CHANNEL  = 6;
 const uint32_t AP_WINDOW_MS      = 300000;  // 5 min programming window per boot
 const uint16_t RECORD_TIMEOUT_MS = 30000;
 const uint32_t ECO_ON_GAP_MS     = 1500;    // ON -> ECO gap when ecoNeedsOn
+
+// ---- Status LED: a smooth heartbeat fade after every IR send ----
+#define LED_PIN            LED_BUILTIN     // GPIO2 on NodeMCU/ESP-12E (active-low)
+const bool     LED_ACTIVE_LOW = true;
+const uint16_t LED_PULSE_MS   = 1250;      // duration of one fade in+out
+const uint8_t  LED_PULSES     = 1;         // heartbeats per IR send
+const uint16_t LED_MAX        = 1023;      // PWM range / peak brightness (0..1023)
 /* ------------------------------------------------------------------------- */
 
 const uint16_t kCaptureBufferSize = 1536;
@@ -67,7 +74,11 @@ const byte DNS_PORT = 53;
 String apSsid = "ERemote";
 
 // Config (LittleFS /cfg.json)
-struct Config { bool ecoNeedsOn = false; } cfg;
+struct Config { bool ecoNeedsOn = false; bool ledEnabled = true; } cfg;
+
+// Status-LED runtime
+bool     ledActive = false;
+uint32_t ledT0     = 0;
 
 // Clock + fire guard kept in RTC memory (survives deep sleep, not power loss)
 struct RtcState { uint32_t magic; uint32_t epoch; int16_t lastFiredMow; };
@@ -94,12 +105,26 @@ uint32_t nowEpoch(){ return baseEpoch + (millis()-baseMillis)/1000; }
 
 void loadCfg(){
   File f=LittleFS.open("/cfg.json","r"); if(!f) return;
-  JsonDocument d; if(!deserializeJson(d,f)) cfg.ecoNeedsOn=d["ecoOn"]|false;
+  JsonDocument d; if(!deserializeJson(d,f)){ cfg.ecoNeedsOn=d["ecoOn"]|false; cfg.ledEnabled=d["ledOn"]|true; }
   f.close();
 }
 void saveCfg(){
-  JsonDocument d; d["ecoOn"]=cfg.ecoNeedsOn;
+  JsonDocument d; d["ecoOn"]=cfg.ecoNeedsOn; d["ledOn"]=cfg.ledEnabled;
   File f=LittleFS.open("/cfg.json","w"); if(f){ serializeJson(d,f); f.close(); }
+}
+
+/* ------------------------------- status LED ----------------------------- */
+void ledWrite(uint16_t v){                          // v: 0..LED_MAX brightness
+  analogWrite(LED_PIN, LED_ACTIVE_LOW ? (LED_MAX - v) : v);
+}
+void ledInit(){ pinMode(LED_PIN,OUTPUT); analogWriteRange(LED_MAX); ledWrite(0); }
+void ledStart(){ if(cfg.ledEnabled){ ledActive=true; ledT0=millis(); } }
+void ledTask(){                                     // non-blocking; call from loop
+  if(!ledActive) return;
+  uint32_t el=millis()-ledT0, total=(uint32_t)LED_PULSE_MS*LED_PULSES;
+  if(el>=total){ ledActive=false; ledWrite(0); return; }
+  float ph=(el % LED_PULSE_MS)/(float)LED_PULSE_MS;  // 0..1 within a pulse
+  ledWrite((uint16_t)(sinf(ph*PI)*LED_MAX));         // smooth fade in then out
 }
 
 /* ------------------------------- IR store ------------------------------- */
@@ -125,6 +150,7 @@ void sendAction(const String& b){
   if(b=="eco" && cfg.ecoNeedsOn && LittleFS.exists(irPath("on"))){
     sendIR("on"); delay(ECO_ON_GAP_MS); sendIR("eco");
   } else sendIR(b);
+  ledStart();                                        // heartbeat "IR sent" feedback
 }
 
 /* ------------------------------ schedules ------------------------------- */
@@ -197,6 +223,7 @@ void handleStatus(){
   d["codes"]["eco"] = LittleFS.exists(irPath("eco"));
   d["epoch"]=nowEpoch();
   d["ecoOn"]=cfg.ecoNeedsOn;
+  d["ledOn"]=cfg.ledEnabled;
   d["apLeft"]=(int)((AP_WINDOW_MS-(millis()-bootMillis))/1000);
   d["lastCapture"]["btn"]=lastCapBtn;
   d["lastCapture"]["proto"]=lastCapProto;
@@ -233,7 +260,9 @@ void handleTime(){
 }
 void handleCfg(){
   JsonDocument d; if(!bodyJson(d)){ sendJson(400,"{\"ok\":false}"); return; }
-  if(d["ecoOn"].is<bool>()){ cfg.ecoNeedsOn=d["ecoOn"]; saveCfg(); }
+  if(d["ecoOn"].is<bool>()) cfg.ecoNeedsOn=d["ecoOn"];
+  if(d["ledOn"].is<bool>()) cfg.ledEnabled=d["ledOn"];
+  saveCfg();
   sendJson(200,"{\"ok\":true}");
 }
 void handleSchedGet(){
@@ -317,6 +346,7 @@ void setup(){
   if(!LittleFS.begin()){ LittleFS.format(); LittleFS.begin(); }
   loadCfg();
   irsend.begin();
+  ledInit();
 
   { char sx[8]; snprintf(sx,sizeof(sx),"%02X",ESP.getChipId()&0xFF);
     apSsid=String(AP_SSID_BASE)+sx; }
@@ -333,6 +363,7 @@ void setup(){
     programMode=false;
     time_t t=(time_t)nowEpoch(); struct tm* g=gmtime(&t);
     fireDue(mowOf(g->tm_wday,g->tm_hour,g->tm_min));
+    while(ledActive){ ledTask(); delay(4); }           // finish the fade if any
     goToSleep();                                       // never returns
   }
 
@@ -349,6 +380,7 @@ void loop(){
   dnsServer.processNextRequest();
   server.handleClient();
   captureIR();
+  ledTask();
   if(sleepRequested || millis()-bootMillis>AP_WINDOW_MS){
     delay(150); goToSleep();                            // never returns
   }
