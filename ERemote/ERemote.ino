@@ -149,6 +149,9 @@ struct Config {
   bool ecoNeedsOn = false;
   bool ledEnabled = true;    // heartbeat LED on IR send
   uint8_t gsChannel = 6;   // emitter's Wi-Fi channel; auto-learned from full sweeps
+  // Optional fleet domain: joined during setup, sent with the claim so the
+  // server groups this device. Empty = standalone (unchanged behaviour).
+  String domainName = "", domainPin = "";
 } cfg;
 
 // Runtime state
@@ -169,6 +172,9 @@ String   lastCapProto  = "";     // button, detected protocol, pulse count,
 uint16_t lastCapLen    = 0;      // and whether the buffer overflowed
 bool     lastCapOvf    = false;
 uint16_t capSeq        = 0;      // ++ on every saved capture; UI detects a NEW one
+String   lastAction    = "unknown";  // last IR command sent (for the fleet console dot)
+String   uploadProfile = "";     // when set, next capture is uploaded to this profile
+String   fetchProfile  = "";     // when set, a task fetches+adopts this profile
 String   pendingSend   = "";     // queued transmit (non-blocking delay)
 uint32_t sendAt        = 0;
 String   pendingSend2  = "";     // 2nd step (ECO after a power-on), if any
@@ -255,6 +261,7 @@ void saveConfig(){
   d["gsMode"]=cfg.gsMode; d["gsOffMode"]=cfg.gsOffMode;
   d["gsSsid"]=cfg.gsSsid; d["gsDelay"]=cfg.gsDelay; d["gsChannel"]=cfg.gsChannel;
   d["ecoOn"]=cfg.ecoNeedsOn; d["ledOn"]=cfg.ledEnabled;
+  d["dom"]=cfg.domainName; d["pin"]=cfg.domainPin;
   File f=LittleFS.open("/config.json","w"); if(f){ serializeJson(d,f); f.close(); }
 }
 void loadConfig(){
@@ -265,6 +272,7 @@ void loadConfig(){
     cfg.gsSsid=d["gsSsid"]|"GENSET_ACTIVE"; cfg.gsDelay=d["gsDelay"]|3;
     cfg.gsChannel=d["gsChannel"]|6; cfg.ecoNeedsOn=d["ecoOn"]|false;
     cfg.ledEnabled=d["ledOn"]|true;
+    cfg.domainName=d["dom"]|""; cfg.domainPin=d["pin"]|"";
     provisioned=true;
   }
   f.close();
@@ -287,6 +295,63 @@ bool sendIR(const String& b){
   uint16_t i=0; for(JsonVariant v:a) buf[i++]=v.as<uint16_t>();
   irsend.sendRaw(buf,len,freq);
   delete[] buf; return true;
+}
+
+// Percent-encode a profile name for a URL query.
+String urlEnc(const String& s){
+  String o; char b[4];
+  for(size_t i=0;i<s.length();i++){ char c=s[i];
+    if(isalnum((unsigned char)c)||c=='-'||c=='_'){ o+=c; }
+    else { snprintf(b,sizeof(b),"%%%02X",(unsigned char)c); o+=b; } }
+  return o;
+}
+// Upload one just-recorded button to the domain's profile library on the server.
+void irUploadRaw(const String& profile, const String& btn,
+                 const uint16_t* raw, uint16_t len, uint16_t freq){
+  if(WiFi.status()!=WL_CONNECTED) return;
+  WiFiClient net; HTTPClient http; http.setTimeout(9000);
+  if(!http.begin(net, ER_HOST, ER_HTTP_PORT, "/api/ir/upload")) return;
+  http.addHeader("Content-Type","application/json");
+  JsonDocument d; d["id"]=devId; d["secret"]=ident.secret;
+  d["profile"]=profile; d["btn"]=btn; d["freq"]=freq;
+  JsonArray a=d["raw"].to<JsonArray>();
+  for(uint16_t i=0;i<len;i++) a.add(raw[i]);
+  String body; serializeJson(d,body);
+  int rc=http.POST(body);
+  Serial.printf("ir upload %s/%s -> %d\n", profile.c_str(), btn.c_str(), rc);
+  http.end();
+}
+// Fetch an assigned profile's codes and adopt them into local storage.
+void irFetchProfile(const String& name){
+  if(WiFi.status()!=WL_CONNECTED) return;
+  WiFiClient net; HTTPClient http; http.setTimeout(9000);
+  String url="/api/ir/profile?id="+devId+"&secret="+String(ident.secret)+"&profile="+urlEnc(name);
+  if(!http.begin(net, ER_HOST, ER_HTTP_PORT, url)) return;
+  int rc=http.GET();
+  if(rc==200){
+    JsonDocument d;
+    if(deserializeJson(d,http.getString())==DeserializationError::Ok && (d["ok"]|false)){
+      JsonObject codes=d["codes"].as<JsonObject>();
+      const char* names[]={"on","off","eco"};
+      for(const char* b: names){
+        if(!codes[b].is<JsonObject>()) continue;
+        JsonArray a=codes[b]["raw"].as<JsonArray>(); uint16_t len=a.size();
+        if(!len) continue;
+        uint16_t* buf=new (std::nothrow) uint16_t[len];
+        if(buf){ uint16_t i=0; for(JsonVariant v:a) buf[i++]=v.as<uint16_t>();
+          saveIR(b,buf,len,"PROFILE"); delete[] buf; }
+      }
+      statePubQueued=true;
+    }
+  }
+  Serial.printf("ir fetch %s -> %d\n", name.c_str(), rc);
+  http.end();
+}
+// Runs assigned-profile fetches outside the MQTT callback (blocking HTTP).
+void profileTask(){
+  if(fetchProfile=="" || WiFi.status()!=WL_CONNECTED) return;
+  String n=fetchProfile; fetchProfile="";
+  irFetchProfile(n);
 }
 
 /* ------------------------------ schedules ------------------------------- */
@@ -404,6 +469,7 @@ void handleStatus(){
   d["time"]["tz"]=cfg.tz;
 
   d["ledOn"]=cfg.ledEnabled;
+  d["domain"]=cfg.domainName;
 
   d["genset"]["mode"]=cfg.gsMode;
   d["genset"]["offMode"]=cfg.gsOffMode;
@@ -514,6 +580,15 @@ void handleLed(){
   JsonDocument d; if(!bodyJson(d)){ sendJson(400,"{\"ok\":false}"); return; }
   applyLedCfg(d); sendJson(200,"{\"ok\":true}");
 }
+void handleDomain(){                                 // wizard: join/set fleet domain
+  JsonDocument d; if(!bodyJson(d)){ sendJson(400,"{\"ok\":false}"); return; }
+  cfg.domainName=(const char*)(d["name"]|"");
+  cfg.domainPin =(const char*)(d["pin"]|"");
+  cfg.domainName.toLowerCase();
+  saveConfig();
+  claimSynced=false; lastClaimAt=0; claimTries=0;    // re-claim so the join registers
+  sendJson(200,"{\"ok\":true}");
+}
 void handleSchedGet(){
   File f=LittleFS.open("/sched.json","r");
   if(!f){ sendJson(200,"[]"); return; }
@@ -554,11 +629,17 @@ void captureIR(){
         uint16_t* raw=resultToRawArray(&results);
         if(raw){
           String proto=typeToString(results.decode_type);   // "UNKNOWN" is fine
-          saveIR(recordTarget,raw,len,proto); delete[] raw;
-          lastCapBtn=recordTarget; lastCapProto=proto;
+          String btn=recordTarget;
+          saveIR(btn,raw,len,proto);
+          lastCapBtn=btn; lastCapProto=proto;
           lastCapLen=len; lastCapOvf=results.overflow; capSeq++;
           recordTarget="";                     // stop the record window now
           statePubQueued=true;                 // tell the server a code changed
+          if(uploadProfile!=""){               // console asked to share this
+            irUploadRaw(uploadProfile, btn, raw, len, 38);
+            uploadProfile="";
+          }
+          delete[] raw;
         }
       }
     }
@@ -597,11 +678,11 @@ void ledTask(){                                     // non-blocking; call from l
 void firePending(){
   if(pendingSend!="" && (int32_t)(millis()-sendAt)>=0){
     String b=pendingSend; pendingSend="";
-    sendIR(b); ledStart();                            // "IR sent" heartbeat
+    sendIR(b); ledStart(); lastAction=b; statePubQueued=true;   // fleet dot
   }
   if(pendingSend2!="" && (int32_t)(millis()-sendAt2)>=0){
     String b=pendingSend2; pendingSend2="";
-    sendIR(b); ledStart();
+    sendIR(b); ledStart(); lastAction=b; statePubQueued=true;
   }
 }
 
@@ -735,6 +816,7 @@ void claimTask(){
   if(!http.begin(net, ER_HOST, ER_HTTP_PORT, "/api/claim")) return;
   http.addHeader("Content-Type","application/json");
   JsonDocument d; d["id"]=devId; d["secret"]=ident.secret; d["fw"]="1.0";
+  if(cfg.domainName.length()){ d["domain"]=cfg.domainName; d["pin"]=cfg.domainPin; }
   String body; serializeJson(d,body);
   int rc=http.POST(body);
   lastClaimRc=rc;                  // negative = HTTPClient error (unreachable etc.)
@@ -778,6 +860,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int len){
   else if(a=="time"){ applyTimeCfg(d); }
   else if(a=="sched_add"){ schedAdd(d); }
   else if(a=="sched_del"){ schedDel((uint32_t)(d["id"]|0)); }
+  else if(a=="record"){                            // console: record a button into a profile
+    String b=(const char*)(d["btn"]|"");
+    if(validBtn(b)){ recordTarget=b; recordDeadline=millis()+RECORD_TIMEOUT_MS;
+      uploadProfile=(const char*)(d["profile"]|""); irrecv.resume(); }
+  }
+  else if(a=="profile"){ fetchProfile=(const char*)(d["name"]|""); }  // adopt shared codes
   statePubQueued=true;                             // echo new state back
 }
 
@@ -795,6 +883,7 @@ void publishState(){
   d["genset"]["ecoOn"]=cfg.ecoNeedsOn;
   d["genset"]["ssid"]=cfg.gsSsid;
   d["ledOn"]=cfg.ledEnabled;
+  d["lastAction"]=lastAction;                        // fleet console status dot
   d["time"]["valid"]=timeValid;
   d["time"]["epoch"]=(uint32_t)time(nullptr);
   d["time"]["ntp"]=cfg.ntp;
@@ -905,6 +994,7 @@ void setup(){
   server.on("/api/time",      HTTP_POST,   handleTime);
   server.on("/api/genset",    HTTP_POST,   handleGenset);
   server.on("/api/led",       HTTP_POST,   handleLed);
+  server.on("/api/domain",    HTTP_POST,   handleDomain);
   server.on("/api/schedule",  HTTP_GET,    handleSchedGet);
   server.on("/api/schedule",  HTTP_POST,   handleSchedPost);
   server.on("/api/schedule",  HTTP_DELETE, handleSchedDel);
@@ -922,6 +1012,7 @@ void loop(){
   captureIR();
   firePending();
   ledTask();
+  profileTask();
   if(!timeValid && time(nullptr)>100000) timeValid=true;
   manageAP();
   checkSchedules();

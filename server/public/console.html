@@ -1,0 +1,222 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ERemote Console</title><style>
+:root{--b:#0f766e;--b2:#0ea5a4;--bg:#0b1220;--card:#131c2b;--line:#243244;
+--txt:#f2f6fb;--mut:#b3c0d4;--ok:#86efac;--bad:#fca5a5;--warn:#fcd34d;
+--on:#3b82f6;--eco:#22c55e;--off:#ef4444;--gray:#4b5563}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Tahoma,sans-serif;
+font-size:16px;background:var(--bg);color:var(--txt);min-height:100vh;padding:16px 16px 48px}
+.wrap{max-width:560px;margin:0 auto}
+header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.logo{width:40px;height:40px;border-radius:12px;flex:none;
+background:linear-gradient(135deg,var(--b),var(--b2));display:grid;place-items:center;font-size:20px}
+header h1{font-size:18px;margin:0;flex:1}
+.lang,.ghostbtn{padding:7px 14px;font-size:13px;font-weight:600;background:var(--line);
+border:0;border-radius:10px;color:var(--txt);cursor:pointer;font-family:inherit}
+section{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+h2{font-size:14px;margin:0 0 12px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+label{display:block;font-size:13.5px;color:var(--mut);margin-bottom:4px}
+input,select{width:100%;padding:12px;margin-bottom:10px;border:1px solid var(--line);border-radius:10px;
+background:var(--bg);color:var(--txt);font-size:16px;font-family:inherit}
+button{border:0;border-radius:12px;padding:11px 16px;font-size:15px;font-weight:700;color:#fff;
+background:var(--b);cursor:pointer;font-family:inherit}
+button.sec{background:var(--line)}button.off{background:#7f1d1d}button.eco{background:#155e75}
+button:disabled{opacity:.5}
+.err{color:var(--bad);font-size:14px;min-height:1.2em;margin-top:6px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.bar button{flex:1;min-width:70px}
+.dev{display:flex;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid var(--line)}
+.dev:last-child{border-bottom:0}
+.dev input[type=checkbox]{width:auto;margin:0;transform:scale(1.3);flex:none}
+.dot{width:13px;height:13px;border-radius:50%;flex:none}
+.nm{flex:1;background:none;border:0;border-bottom:1px dashed transparent;color:var(--txt);
+font-size:16px;padding:4px 2px;margin:0}
+.nm:focus{outline:none;border-bottom-color:var(--b2)}
+.meta{font-size:12px;color:var(--mut);flex:none;direction:ltr}
+.days{display:flex;gap:6px;margin:6px 0 12px;flex-wrap:wrap}
+.day{flex:1;min-width:34px;padding:8px 0;text-align:center;font-size:13px;font-weight:600;
+border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--mut);cursor:pointer;user-select:none}
+.day.sel{background:var(--b);border-color:var(--b);color:#fff}
+.inline{display:flex;gap:8px}.inline>*{flex:1}
+.prof{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line);font-size:15px}
+.prof b{flex:1}
+.prof button{padding:8px 12px;font-size:13px}
+.small{font-size:12.5px;color:var(--mut);line-height:1.6;margin:0 0 10px}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1e293b;
+border:1px solid var(--line);color:var(--txt);padding:12px 18px;border-radius:12px;font-size:15px;display:none;max-width:90vw}
+.hide{display:none}
+</style></head><body><div class="wrap">
+
+<header>
+  <div class="logo">🎛️</div>
+  <h1>ERemote <span data-k="console"></span> <span id="domlabel" style="color:var(--mut);font-size:14px"></span></h1>
+  <button class="lang" id="lang" onclick="setLang(L=='en'?'ar':'en')">EN</button>
+  <button class="ghostbtn hide" id="logout" onclick="logout()" data-k="logout"></button>
+</header>
+
+<section id="login">
+  <h2 data-k="loginT"></h2>
+  <label data-k="domain"></label>
+  <input id="i_dom" maxlength="24" autocapitalize="off" placeholder="building1">
+  <label data-k="pin"></label>
+  <input id="i_pin" type="tel" maxlength="4" inputmode="numeric" placeholder="0000">
+  <button style="width:100%" onclick="login()" data-k="enter"></button>
+  <div class="err" id="loginerr"></div>
+</section>
+
+<div id="app" class="hide">
+  <section>
+    <h2 data-k="devices"></h2>
+    <div class="bar">
+      <button class="sec" onclick="selAll()" data-k="selAll"></button>
+      <button onclick="batch('on')" style="background:var(--on)" data-k="bOn"></button>
+      <button class="eco" onclick="batch('eco')" data-k="bEco"></button>
+      <button class="off" onclick="batch('off')" data-k="bOff"></button>
+    </div>
+    <div id="devlist"></div>
+    <p class="small" id="emptynote"></p>
+  </section>
+
+  <section>
+    <h2 data-k="schedT"></h2>
+    <p class="small" data-k="schedNote"></p>
+    <div class="inline">
+      <div><label data-k="action"></label>
+        <select id="s_act"><option value="on" data-k="bOn"></option>
+        <option value="off" data-k="bOff"></option><option value="eco" data-k="bEco"></option></select></div>
+      <div><label data-k="at"></label><input id="s_time" type="time" value="14:00"></div>
+    </div>
+    <label data-k="days"></label><div class="days" id="s_days"></div>
+    <button style="width:100%" onclick="schedule()" data-k="schedBtn"></button>
+  </section>
+
+  <section>
+    <h2 data-k="profT"></h2>
+    <p class="small" data-k="profNote"></p>
+    <div id="proflist"></div>
+    <label data-k="recNew" style="margin-top:10px"></label>
+    <div class="inline">
+      <input id="p_name" maxlength="24" placeholder="Tossot">
+      <select id="p_btn"><option value="on" data-k="bOn"></option>
+      <option value="off" data-k="bOff"></option><option value="eco" data-k="bEco"></option></select>
+    </div>
+    <select id="p_dev"></select>
+    <button style="width:100%" onclick="recordProfile()" data-k="recBtn"></button>
+  </section>
+</div>
+
+</div><div id="toast"></div><script>
+var D={
+en:{console:'Console',logout:'Log out',loginT:'Enter your domain',domain:'Domain name',pin:'4-digit PIN',
+enter:'Enter',authErr:'Wrong domain or PIN.',rateErr:'Too many tries — wait a minute.',neterr:'Connection error.',
+devices:'Devices',selAll:'Select all',bOn:'ON',bEco:'ECO',bOff:'OFF',
+empty:'No devices in this domain yet. Add one during its setup wizard.',
+schedT:'Batch schedule',schedNote:'Adds this schedule to every selected device.',
+action:'Action',at:'Time',days:'Days',schedBtn:'Schedule selected',pickSel:'Select at least one device.',pickDay:'Pick at least one day.',
+profT:'AC profiles',profNote:'Record a remote once and share it to selected devices in this domain.',
+recNew:'Record a new profile button',recBtn:'Record on device',assign:'Assign',del:'Delete',
+sent:'Sent to {n} device(s).',saved:'Saved.',recAsk:'Point the AC remote at that device and press the button now.',
+online:'online',offline:'offline',lang:'عربي',dayS:['Sun','Mon','Tue','Wed','Thu','Fri','Sat']},
+ar:{console:'لوحة التحكم',logout:'خروج',loginT:'أدخل نطاقك',domain:'اسم النطاق',pin:'رمز من ٤ أرقام',
+enter:'دخول',authErr:'نطاق أو رمز خاطئ.',rateErr:'محاولات كثيرة — انتظر دقيقة.',neterr:'خطأ في الاتصال.',
+devices:'الأجهزة',selAll:'تحديد الكل',bOn:'تشغيل',bEco:'اقتصادي',bOff:'إطفاء',
+empty:'لا توجد أجهزة في هذا النطاق بعد. أضِف جهازاً أثناء معالج إعداده.',
+schedT:'جدولة جماعية',schedNote:'تضيف هذه الجدولة لكل جهاز محدد.',
+action:'الإجراء',at:'الوقت',days:'الأيام',schedBtn:'جدولة المحددة',pickSel:'حدد جهازاً واحداً على الأقل.',pickDay:'اختر يوماً واحداً على الأقل.',
+profT:'ملفات المكيفات',profNote:'سجّل ريموتاً مرة واحدة وشاركه مع الأجهزة المحددة في نطاقك.',
+recNew:'تسجيل زر ملف جديد',recBtn:'سجّل على الجهاز',assign:'تعيين',del:'حذف',
+sent:'أُرسل إلى {n} جهاز.',saved:'تم الحفظ.',recAsk:'وجّه ريموت المكيف نحو ذلك الجهاز واضغط الزر الآن.',
+online:'متصل',offline:'غير متصل',lang:'EN',dayS:['أحد','إثن','ثلا','أرب','خمي','جمع','سبت']}};
+var L='ar',DOM='',PIN='',DEVS=[],PROFS=[],selDays=[],poll=null;
+function t(k){return D[L][k]}
+function $(id){return document.getElementById(id)}
+function toast(m){var e=$('toast');e.textContent=m;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(function(){e.style.display='none'},3200)}
+function setLang(l){L=l;try{localStorage.setItem('erl',l)}catch(e){}
+document.documentElement.lang=l;document.documentElement.dir=(l=='ar')?'rtl':'ltr';
+var e=document.querySelectorAll('[data-k]');for(var i=0;i<e.length;i++)e[i].textContent=t(e[i].getAttribute('data-k'));
+$('lang').textContent=t('lang');renderDays();render()}
+
+async function api(path,extra){
+var body=Object.assign({domain:DOM,pin:PIN},extra||{});
+var r=await fetch('/api/console/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+if(r.status===429)throw'rate'; if(r.status===403)throw'auth'; return r.json()}
+
+async function login(){
+DOM=$('i_dom').value.trim().toLowerCase();PIN=$('i_pin').value.trim();
+$('loginerr').textContent='';
+if(!DOM||PIN.length!==4){$('loginerr').textContent=t('authErr');return}
+try{await refresh();
+try{localStorage.setItem('erd',DOM);localStorage.setItem('erp',PIN)}catch(e){}
+$('login').classList.add('hide');$('app').classList.remove('hide');$('logout').classList.remove('hide');
+$('domlabel').textContent='· '+DOM;
+if(poll)clearInterval(poll);poll=setInterval(refresh,4000);
+}catch(x){$('loginerr').textContent=x=='rate'?t('rateErr'):x=='auth'?t('authErr'):t('neterr')}}
+function logout(){if(poll)clearInterval(poll);DOM='';PIN='';
+try{localStorage.removeItem('erd');localStorage.removeItem('erp')}catch(e){}
+$('app').classList.add('hide');$('logout').classList.add('hide');$('login').classList.remove('hide');$('domlabel').textContent=''}
+
+async function refresh(){var d=await api('list');DEVS=d.devices||[];PROFS=d.profiles||[];render()}
+
+function dotColor(dev){if(!dev.online)return'var(--gray)';
+return dev.lastAction=='on'?'var(--on)':dev.lastAction=='eco'?'var(--eco)':dev.lastAction=='off'?'var(--off)':'var(--gray)'}
+function selectedCodes(){return DEVS.filter(function(d){var c=$('c_'+d.code);return c&&c.checked}).map(function(d){return d.code})}
+
+function render(){
+if(!$('devlist'))return;
+var keep={};DEVS.forEach(function(d){var c=$('c_'+d.code);keep[d.code]=c&&c.checked});
+var L2=$('devlist');L2.innerHTML='';
+DEVS.forEach(function(d){var row=document.createElement('div');row.className='dev';
+var cb=document.createElement('input');cb.type='checkbox';cb.id='c_'+d.code;cb.checked=!!keep[d.code];
+var dot=document.createElement('div');dot.className='dot';dot.style.background=dotColor(d);
+var nm=document.createElement('input');nm.className='nm';nm.value=d.name||d.code;nm.title=d.code;
+nm.onchange=function(){api('name',{code:d.code,name:nm.value}).then(function(){toast(t('saved'))})};
+var meta=document.createElement('span');meta.className='meta';
+meta.textContent=(d.profile?d.profile+' · ':'')+(d.online?t('online'):t('offline'));
+row.appendChild(cb);row.appendChild(dot);row.appendChild(nm);row.appendChild(meta);L2.appendChild(row)});
+$('emptynote').textContent=DEVS.length?'':t('empty');
+// profiles
+var P=$('proflist');P.innerHTML='';
+PROFS.forEach(function(name){var r=document.createElement('div');r.className='prof';
+var b=document.createElement('b');b.textContent=name;
+var as=document.createElement('button');as.className='sec';as.textContent=t('assign');
+as.onclick=function(){assign(name)};
+var dl=document.createElement('button');dl.className='off';dl.textContent=t('del');
+dl.onclick=function(){api('profile_del',{profile:name}).then(refresh)};
+r.appendChild(b);r.appendChild(as);r.appendChild(dl);P.appendChild(r)});
+// record device dropdown
+var pd=$('p_dev');var cur=pd.value;pd.innerHTML='';
+DEVS.forEach(function(d){var o=document.createElement('option');o.value=d.code;
+o.textContent=(d.name||d.code)+(d.online?'':' ('+t('offline')+')');pd.appendChild(o)});
+if(cur)pd.value=cur}
+
+function renderDays(){var b=$('s_days');if(!b)return;b.innerHTML='';
+for(var i=0;i<7;i++)(function(i){var d=document.createElement('div');
+d.className='day'+(selDays.indexOf(i)>=0?' sel':'');d.textContent=t('dayS')[i];
+d.onclick=function(){var p=selDays.indexOf(i);if(p>=0)selDays.splice(p,1);else selDays.push(i);renderDays()};
+b.appendChild(d)})(i)}
+
+function selAll(){var any=selectedCodes().length<DEVS.length;
+DEVS.forEach(function(d){var c=$('c_'+d.code);if(c)c.checked=any})}
+
+async function batch(btn){var codes=selectedCodes();if(!codes.length){toast(t('pickSel'));return}
+var r=await api('cmd',{codes:codes,btn:btn});toast(t('sent').replace('{n}',r.sent||0));setTimeout(refresh,800)}
+
+async function schedule(){var codes=selectedCodes();if(!codes.length){toast(t('pickSel'));return}
+if(!selDays.length){toast(t('pickDay'));return}
+var tm=$('s_time').value.split(':');
+var r=await api('schedule',{codes:codes,action:$('s_act').value,hour:+tm[0],min:+tm[1],days:selDays});
+toast(t('sent').replace('{n}',r.sent||0));selDays=[];renderDays()}
+
+async function assign(name){var codes=selectedCodes();if(!codes.length){toast(t('pickSel'));return}
+var r=await api('assign',{codes:codes,profile:name});toast(t('sent').replace('{n}',r.sent||0));setTimeout(refresh,800)}
+
+async function recordProfile(){var name=$('p_name').value.trim();var code=$('p_dev').value;
+if(!name||!code){toast(t('pickSel'));return}
+await api('record',{code:code,profile:name,btn:$('p_btn').value});
+toast(t('recAsk'));setTimeout(refresh,1500)}
+
+var s='ar';try{s=localStorage.getItem('erl')||'ar'}catch(e){}setLang(s);
+try{var sd=localStorage.getItem('erd'),sp=localStorage.getItem('erp');
+if(sd&&sp){$('i_dom').value=sd;$('i_pin').value=sp;login()}}catch(e){}
+</script></body></html>

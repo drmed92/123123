@@ -34,11 +34,16 @@ const MQTT_HOST  = process.env.MQTT_PUBLIC_HOST || new URL(BASE_URL).hostname;
 const DATA_FILE  = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 
 /* ------------------------------- device DB ------------------------------- */
-// { devices: { id: { secret, code, createdAt } }, codes: { CODE: id } }
-let db = { devices: {}, codes: {} };
+// { devices: { id: { secret, code, createdAt, domain?, name?, profile? } },
+//   codes:   { CODE: id },
+//   domains: { name: { pin, createdAt, library: { profile: {on,off,eco} } } } }
+// domain/name/profile and the whole domains map are OPTIONAL: devices claimed
+// before fleet support simply lack them and behave exactly as before.
+let db = { devices: {}, codes: {}, domains: {} };
 try { db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) { /* first run */ }
 if (!db.devices) db.devices = {};
 if (!db.codes) db.codes = {};
+if (!db.domains) db.domains = {};
 
 function saveDb() {
   const tmp = DATA_FILE + '.tmp';
@@ -59,6 +64,9 @@ function genCode() {
 const ID_RE     = /^d[0-9a-f]{1,8}$/;
 const SECRET_RE = /^[0-9a-f]{32}$/;
 const BTNS      = ['on', 'off', 'eco'];
+const DOMAIN_RE = /^[a-z0-9][a-z0-9-]{1,23}$/;   // 2-24 chars, lowercased
+const PIN_RE    = /^[0-9]{4}$/;
+const PROFILE_RE = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,23}$/;
 
 /* ----------------------------- live state cache --------------------------- */
 const states = new Map();      // id -> { state: {...}, lastSeen: ms }
@@ -114,7 +122,7 @@ net.createServer(aedes.handle).listen(MQTT_PORT, () =>
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 'loopback');        // Caddy runs on the same box
-app.use(express.json({ limit: '4kb' }));
+app.use(express.json({ limit: '16kb' }));   // IR raw arrays travel through here
 
 // Per-IP rate limit for anything that carries an access code: makes guessing
 // 6-char codes impractical (31^6 combos at 30 tries/min ≈ forever).
@@ -149,13 +157,33 @@ app.post('/api/claim', (req, res) => {
     console.log(`[claim] REJECT ${id}: secret mismatch`);
     return res.status(403).json({ ok: false, error: 'secret-mismatch' });
   }
+  let dirty = false;
   if (!dev) {
     dev = { secret, code: genCode(), createdAt: Date.now() };
     db.devices[id] = dev;
     db.codes[dev.code] = id;
-    saveDb();
+    dirty = true;
     console.log(`[claim] NEW ${id} -> code ${dev.code}`);
   }
+
+  // Optional domain join. Old firmware omits these fields entirely -> no-op.
+  const dom = String((req.body || {}).domain || '').toLowerCase();
+  const pin = String((req.body || {}).pin || '');
+  if (dom) {
+    if (!DOMAIN_RE.test(dom) || !PIN_RE.test(pin))
+      return res.status(400).json({ ok: false, error: 'bad-domain' });
+    const existing = db.domains[dom];
+    if (existing) {
+      if (existing.pin !== pin)
+        return res.status(403).json({ ok: false, error: 'domain-pin' });
+    } else {
+      db.domains[dom] = { pin, createdAt: Date.now(), library: {} };
+      console.log(`[domain] NEW ${dom}`);
+    }
+    if (dev.domain !== dom) { dev.domain = dom; console.log(`[domain] ${id} -> ${dom}`); }
+    dirty = true;
+  }
+  if (dirty) saveDb();
   // Always hand back an https link on the public domain. Prefer the Host the
   // device actually reached us on (er.my.to via Caddy); fall back to BASE_URL.
   // This avoids ever returning a raw http://IP link.
@@ -210,6 +238,168 @@ app.get('/api/r/:code/events', rateLimit, (req, res) => {
     const hb = setInterval(() => res.write(': hb\n\n'), 25000);
     req.on('close', () => { clearInterval(hb); sseClients.get(id).delete(res); });
   });
+});
+
+/* =============================== fleet console ============================ */
+// Console auth is a fleet master key, so guessing must be slow. Allow a burst
+// of 20 attempts per IP, then hard-throttle to a trickle.
+const domTries = new Map();               // ip -> { n, resetAt }
+function consoleLimit(req, res, next) {
+  const now = Date.now();
+  let a = domTries.get(req.ip);
+  if (!a || now > a.resetAt) { a = { n: 0, resetAt: now + 600000 }; domTries.set(req.ip, a); }
+  a.n++;
+  if (a.n > 20 && a.n % 5 !== 0) {        // after 20, only 1 in 5 gets through
+    return setTimeout(() => res.status(429).json({ ok: false, error: 'rate' }), 1000);
+  }
+  next();
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, a] of domTries) if (now > a.resetAt) domTries.delete(ip);
+}, 600000).unref();
+
+// Validate {domain,pin} in the body; on success call cb(domainName, domainObj).
+function authDomain(req, res, cb) {
+  const dom = String((req.body || {}).domain || '').toLowerCase();
+  const pin = String((req.body || {}).pin || '');
+  const d = db.domains[dom];
+  if (!d || d.pin !== pin)
+    return setTimeout(() => res.status(403).json({ ok: false, error: 'auth' }), 500);
+  cb(dom, d);
+}
+function pubCmd(id, msg) {
+  aedes.publish({ topic: `er/${id}/cmd`, payload: JSON.stringify(msg),
+                  qos: 0, retain: false }, () => {});
+}
+// Codes in `list` that belong to this domain -> device ids.
+function domainDeviceIds(dom, list) {
+  const out = [];
+  for (const c of (Array.isArray(list) ? list : [])) {
+    const id = db.codes[String(c).toUpperCase()];
+    if (id && db.devices[id] && db.devices[id].domain === dom) out.push(id);
+  }
+  return out;
+}
+const ONLINE_MS = 90000;                  // state fresher than this = online
+
+app.get('/console', (req, res) =>
+  res.sendFile(path.join(__dirname, 'public', 'console.html')));
+
+// List the domain's devices + profiles.
+app.post('/api/console/list', consoleLimit, (req, res) => authDomain(req, res, (dom, d) => {
+  const now = Date.now();
+  const devices = [];
+  for (const [id, dev] of Object.entries(db.devices)) {
+    if (dev.domain !== dom) continue;
+    const e = states.get(id);
+    const online = !!e && (now - e.lastSeen) < ONLINE_MS;
+    devices.push({
+      code: dev.code, name: dev.name || '', profile: dev.profile || '',
+      lastAction: (e && e.state && e.state.lastAction) || 'unknown',
+      online, lastSeen: e ? e.lastSeen : 0,
+    });
+  }
+  devices.sort((a, b) => (a.name || a.code).localeCompare(b.name || b.code));
+  res.json({ ok: true, devices, profiles: Object.keys(d.library || {}).sort() });
+}));
+
+// Rename / renumber a device (room label).
+app.post('/api/console/name', consoleLimit, (req, res) => authDomain(req, res, (dom) => {
+  const ids = domainDeviceIds(dom, [req.body.code]);
+  if (!ids.length) return res.status(404).json({ ok: false });
+  db.devices[ids[0]].name = String(req.body.name || '').slice(0, 32);
+  saveDb();
+  res.json({ ok: true });
+}));
+
+// Batch command: fan out a=send to the selected devices.
+app.post('/api/console/cmd', consoleLimit, (req, res) => authDomain(req, res, (dom) => {
+  const btn = String(req.body.btn || '');
+  if (!BTNS.includes(btn)) return res.status(400).json({ ok: false });
+  const ids = domainDeviceIds(dom, req.body.codes);
+  for (const id of ids) pubCmd(id, { a: 'send', btn });
+  res.json({ ok: true, sent: ids.length });
+}));
+
+// Batch schedule: fan out a=sched_add to the selected devices.
+app.post('/api/console/schedule', consoleLimit, (req, res) => authDomain(req, res, (dom) => {
+  const action = String(req.body.action || '');
+  if (!BTNS.includes(action)) return res.status(400).json({ ok: false });
+  const days = (Array.isArray(req.body.days) ? req.body.days : [])
+    .map(Number).filter((n) => n >= 0 && n <= 6);
+  if (!days.length) return res.status(400).json({ ok: false, error: 'days' });
+  const msg = { a: 'sched_add', action, hour: (req.body.hour | 0),
+                min: (req.body.min | 0), days };
+  const ids = domainDeviceIds(dom, req.body.codes);
+  for (const id of ids) pubCmd(id, msg);
+  res.json({ ok: true, sent: ids.length });
+}));
+
+// Assign a stored profile to devices: they fetch the codes over HTTP.
+app.post('/api/console/assign', consoleLimit, (req, res) => authDomain(req, res, (dom, d) => {
+  const profile = String(req.body.profile || '');
+  if (!(d.library && d.library[profile])) return res.status(404).json({ ok: false });
+  const ids = domainDeviceIds(dom, req.body.codes);
+  for (const id of ids) { db.devices[id].profile = profile; pubCmd(id, { a: 'profile', name: profile }); }
+  saveDb();
+  res.json({ ok: true, sent: ids.length });
+}));
+
+// Ask one device to (re)record a button into a profile.
+app.post('/api/console/record', consoleLimit, (req, res) => authDomain(req, res, (dom, d) => {
+  const profile = String(req.body.profile || '');
+  const btn = String(req.body.btn || '');
+  if (!PROFILE_RE.test(profile) || !BTNS.includes(btn)) return res.status(400).json({ ok: false });
+  const ids = domainDeviceIds(dom, [req.body.code]);
+  if (!ids.length) return res.status(404).json({ ok: false });
+  if (!d.library[profile]) { d.library[profile] = {}; saveDb(); }   // reserve the name
+  pubCmd(ids[0], { a: 'record', profile, btn });
+  res.json({ ok: true });
+}));
+
+// Delete a stored profile from the domain library.
+app.post('/api/console/profile_del', consoleLimit, (req, res) => authDomain(req, res, (dom, d) => {
+  const profile = String(req.body.profile || '');
+  if (d.library && d.library[profile]) { delete d.library[profile]; saveDb(); }
+  res.json({ ok: true });
+}));
+
+/* ------- device-facing IR library (auth by id+secret, like /api/claim) ---- */
+function authDevice(req) {
+  const id = String((req.body && req.body.id) || req.query.id || '');
+  const secret = String((req.body && req.body.secret) || req.query.secret || '');
+  const dev = db.devices[id];
+  if (!dev || dev.secret !== secret || !dev.domain) return null;
+  return { id, dev };
+}
+
+// A device uploads one recorded button into its domain's profile library.
+app.post('/api/ir/upload', (req, res) => {
+  const a = authDevice(req);
+  if (!a) return res.status(403).json({ ok: false });
+  const profile = String(req.body.profile || '');
+  const btn = String(req.body.btn || '');
+  const raw = req.body.raw;
+  if (!PROFILE_RE.test(profile) || !BTNS.includes(btn) ||
+      !Array.isArray(raw) || raw.length < 4 || raw.length > 1024)
+    return res.status(400).json({ ok: false, error: 'bad-ir' });
+  const lib = db.domains[a.dev.domain].library;
+  if (!lib[profile]) lib[profile] = {};
+  lib[profile][btn] = { raw: raw.map((n) => n | 0), freq: (req.body.freq | 0) || 38 };
+  saveDb();
+  console.log(`[ir] ${a.id} uploaded ${profile}/${btn} (${raw.length})`);
+  res.json({ ok: true });
+});
+
+// A device fetches its assigned profile's codes to adopt them.
+app.get('/api/ir/profile', (req, res) => {
+  const a = authDevice(req);
+  if (!a) return res.status(403).json({ ok: false });
+  const profile = String(req.query.profile || '');
+  const lib = db.domains[a.dev.domain].library;
+  if (!lib[profile]) return res.status(404).json({ ok: false });
+  res.json({ ok: true, profile, codes: lib[profile] });
 });
 
 app.get('/healthz', (req, res) => res.send('ok'));
