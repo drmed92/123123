@@ -55,6 +55,12 @@ padding:10px 0;border-bottom:1px solid var(--line);font-size:16px}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
 background:#1e293b;border:1px solid var(--line);color:var(--txt);padding:12px 18px;
 border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+@media(min-width:720px){
+.wrap{max-width:880px;display:grid;grid-template-columns:1fr 1fr;gap:16px;
+align-items:start;padding:10px 16px 40px}
+.wrap>header,.wrap>.off-note{grid-column:1/-1}
+.wrap>section{margin-bottom:0}
+}
 </style></head><body><div class="wrap">
 
 <header>

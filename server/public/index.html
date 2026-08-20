@@ -35,6 +35,14 @@ button:disabled{opacity:.6}
 .feat b{display:block;font-size:16.5px;margin-bottom:3px}
 .feat span{color:var(--mut);font-size:15px;line-height:1.7}
 footer{text-align:center;color:var(--mut);font-size:13.5px;margin-top:22px}
+@media(min-width:720px){
+.wrap{max-width:860px;display:grid;grid-template-columns:minmax(320px,360px) 1fr;
+gap:20px;align-items:start;padding:22px 16px 48px}
+.wrap>section{margin-top:0}
+footer{grid-column:1/-1}
+.banner{border-radius:0 0 26px 26px}
+.banner h1{font-size:32px}
+}
 </style></head><body>
 
 <div class="banner">
