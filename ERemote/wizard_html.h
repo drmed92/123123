@@ -93,6 +93,9 @@ en:{
  rerec:'Record again',retry:'Try again',next:'Next',back:'Back',
  skipEco:'My remote has no ECO button — skip',
  skipRec:'Skip this button — set it up later',
+ dmTitle:'Building / fleet (optional)',
+ dmDesc:'If this device is part of a set you control together (e.g. many rooms), join a domain to manage them from one console at er.my.to/console. Leave blank for a single device.',
+ dmName:'Domain name',dmPin:'4-digit PIN',dmSkip:'Skip — single device',
  fTitle:'Connect to home Wi-Fi',
  fSub:'Choose your home Wi-Fi so the device gets the correct time and can be controlled from the internet.',
  scanning:'Searching for networks…',refresh:'Search again',
@@ -137,6 +140,9 @@ ar:{
  rerec:'إعادة التسجيل',retry:'حاول مجدداً',next:'التالي',back:'رجوع',
  skipEco:'الريموت لا يحتوي على زر اقتصادي — تخطَّ',
  skipRec:'تخطَّ هذا الزر — أعدّه لاحقاً',
+ dmTitle:'مبنى / أسطول (اختياري)',
+ dmDesc:'إذا كان هذا الجهاز ضمن مجموعة تتحكم بها معاً (عدة غرف مثلاً)، انضم إلى نطاق لإدارتها من لوحة واحدة على er.my.to/console. اتركه فارغاً لجهاز واحد.',
+ dmName:'اسم النطاق',dmPin:'رمز من ٤ أرقام',dmSkip:'تخطَّ — جهاز واحد',
  fTitle:'الاتصال بواي فاي المنزل',
  fSub:'اختر شبكة الواي فاي في منزلك ليحصل الجهاز على الوقت الصحيح وتتمكن من التحكم به عبر الإنترنت.',
  scanning:'جارٍ البحث عن الشبكات…',refresh:'إعادة البحث',
@@ -186,7 +192,7 @@ async function getStatus(){try{var r=await fetch('/api/status');ST=await r.json(
 function codeSet(b){return !!(ST&&ST.codes&&ST.codes[b]&&ST.codes[b].set)}
 
 /* ---------- navigation ---------- */
-var STEPS=['on','off','eco','wifi','genset','done'];
+var STEPS=['on','off','eco','wifi','genset','domain','done'];
 function dots(i){var d=$('dots');d.style.display='flex';d.innerHTML='';
 for(var k=0;k<STEPS.length;k++){var s=document.createElement('div');
 s.className='dot'+(k<i?' done':k==i?' act':'');d.appendChild(s)}}
@@ -195,6 +201,7 @@ if(id=='welcome')showWelcome();
 else if(id=='on'||id=='off'||id=='eco')showRecord(id);
 else if(id=='wifi')showWifi();
 else if(id=='genset')showGenset();
+else if(id=='domain')showDomain();
 else if(id=='done')showDone()}
 function nextOf(id){return STEPS[STEPS.indexOf(id)+1]}
 
@@ -307,7 +314,7 @@ h('<h1>'+t('gTitle')+'</h1><p>'+t('gQ')+'</p><p style="font-size:14px">'+t('gNot
 async function gensetNo(){gsChoice='disabled';
 try{await fetch('/api/genset',{method:'POST',body:JSON.stringify(
 {mode:'disabled',delay:3,ssid:'GENSET_ACTIVE'})})}catch(e){}
-go('done')}
+go('domain')}
 function gensetYes(){clearTimers();
 var rb=function(nm,id,val,lbl,chk){return '<div class="radio"><input type="radio" name="'+nm+'" id="'+id+'" value="'+val+'"'+(chk?' checked':'')+'>'+
 '<label for="'+id+'" style="font-size:15px;color:var(--txt)">'+lbl+'</label></div>'};
@@ -333,10 +340,26 @@ gsChoice=$('ga_eco').checked?'eco':'off';
 var om=document.querySelector('input[name="gao"]:checked').value;
 try{await fetch('/api/genset',{method:'POST',body:JSON.stringify(
 {mode:gsChoice,offMode:om,ecoOn:$('gecoon').checked,delay:Math.max(0,parseInt($('gdel').value)||0),ssid:'GENSET_ACTIVE'})})}catch(e){}
+go('domain')}
+
+/* ---------- domain (optional fleet membership) ---------- */
+function showDomain(){dots(5);
+h('<h1>'+t('dmTitle')+'</h1><p>'+t('dmDesc')+'</p>'+
+'<label>'+t('dmName')+'</label><input id="dm_name" maxlength="24" autocapitalize="off" placeholder="building1">'+
+'<label>'+t('dmPin')+'</label><input id="dm_pin" type="tel" maxlength="4" inputmode="numeric" placeholder="0000">'+
+'<button class="pri" onclick="domainSave()">'+t('next')+'</button>'+
+'<button class="ghost" onclick="go(\'done\')">'+t('dmSkip')+'</button>');
+if(ST&&ST.domain)$('dm_name').value=ST.domain}
+async function domainSave(){
+var n=$('dm_name').value.trim().toLowerCase(),p=$('dm_pin').value.trim();
+if(!n){go('done');return}
+if(!/^[a-z0-9][a-z0-9-]{1,23}$/.test(n)||!/^[0-9]{4}$/.test(p)){
+var e=$('dm_pin');e.style.borderColor='var(--bad)';return}
+try{await fetch('/api/domain',{method:'POST',body:JSON.stringify({name:n,pin:p})})}catch(e){}
 go('done')}
 
 /* ---------- done ---------- */
-async function showDone(){dots(5);
+async function showDone(){dots(6);
 try{await fetch('/api/init',{method:'POST'})}catch(e){}
 await getStatus();
 renderDoneCard();
