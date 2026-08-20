@@ -46,6 +46,13 @@ border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1e293b;
 border:1px solid var(--line);color:var(--txt);padding:12px 18px;border-radius:12px;font-size:15px;display:none;max-width:90vw}
 .hide{display:none}
+@media(min-width:820px){
+.wrap{max-width:1000px}
+#login{max-width:440px;margin:0 auto}
+#app{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+#app>section{margin-bottom:0}
+#app>section:first-child{grid-column:1/-1}
+}
 </style></head><body><div class="wrap">
 
 <header>
