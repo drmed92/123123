@@ -72,6 +72,19 @@ animation:ledpulse 1.6s ease-in-out infinite}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
 background:#1e293b;border:1px solid var(--line);color:var(--txt);padding:11px 18px;
 border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.hbtn{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;
+background:var(--line);color:var(--mut);font-size:12px;font-weight:800;border:0;cursor:pointer;
+padding:0;flex:none;margin-inline-start:2px;font-family:inherit;vertical-align:middle}
+.modalbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;
+align-items:center;justify-content:center;padding:20px}
+.modalbg.show{display:flex}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;
+max-width:380px;width:100%;max-height:80vh;overflow:auto;position:relative;
+box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.mclose{position:absolute;top:10px;inset-inline-end:10px;background:var(--line);color:var(--txt);
+border:0;border-radius:50%;width:30px;height:30px;font-size:18px;line-height:1;padding:0;cursor:pointer}
+.modal h3{margin:0 30px 10px 0;font-size:17px}
+.helpbody{color:var(--mut);font-size:14.5px;line-height:1.7;white-space:pre-line}
 </style></head><body><div class="wrap">
 
 <header>
@@ -83,7 +96,7 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
 </header>
 
 <section>
-  <h2 data-k="remote"></h2>
+  <h2><span data-k="remote"></span><button class="hbtn" onclick="showHelp('remote')">?</button></h2>
   <div class="row"><div><div class="bt" data-k="on"></div><div class="st" id="st_on"></div></div>
     <div class="acts"><button onclick="doSend('on')" data-k="send"></button>
     <button class="sec" onclick="doRec('on')" data-k="rec"></button></div></div>
@@ -98,7 +111,7 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
 
 <section>
   <h2 style="display:flex;align-items:center;gap:9px"><span class="led" id="rled"></span>
-  <span data-k="rTitle"></span></h2>
+  <span data-k="rTitle"></span><button class="hbtn" onclick="showHelp('access')">?</button></h2>
   <p class="desc" data-k="rDesc"></p>
   <div class="kv"><span data-k="status"></span><span id="rst">-</span></div>
   <div id="rlinkbox" style="display:none;margin-top:8px">
@@ -110,11 +123,23 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
   </div>
   <p class="desc" id="rwait" data-k="rWait" style="display:none;margin:8px 0 0"></p>
   <p class="desc" id="rerr" style="display:none;margin:6px 0 0;color:var(--warn)"></p>
+  <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+    <div class="kv"><span data-k="pinStatus"></span><span id="pinst">-</span></div>
+    <button class="sec" style="width:100%;margin-top:8px" onclick="togglePinForm()" data-k="pinChange"></button>
+    <div id="pinform" style="display:none;margin-top:10px">
+      <label data-k="pinNew"></label>
+      <input id="pin_new" type="tel" maxlength="4" inputmode="numeric" placeholder="0000">
+      <div class="inline">
+        <button onclick="savePin()" data-k="save"></button>
+        <button class="sec" onclick="removePin()" data-k="pinRemove"></button>
+      </div>
+    </div>
+  </div>
 </section>
 
 <section>
   <h2 style="display:flex;align-items:center;gap:9px"><span class="led" id="gled"></span>
-  <span data-k="genset"></span></h2>
+  <span data-k="genset"></span><button class="hbtn" onclick="showHelp('genset')">?</button></h2>
   <p class="desc" data-k="gsDesc"></p>
   <div class="kv"><span data-k="status"></span><span id="gdet">-</span></div>
   <div style="margin-top:8px">
@@ -144,7 +169,7 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
 </section>
 
 <section>
-  <h2 data-k="schedules"></h2>
+  <h2><span data-k="schedules"></span><button class="hbtn" onclick="showHelp('sched')">?</button></h2>
   <div id="slist"></div>
   <div style="margin-top:12px">
     <div class="inline">
@@ -161,7 +186,7 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
 </section>
 
 <section>
-  <h2 data-k="wifi"></h2>
+  <h2><span data-k="wifi"></span><button class="hbtn" onclick="showHelp('wifi')">?</button></h2>
   <div class="kv"><span data-k="status"></span><span id="wst"></span></div>
   <div class="kv"><span>IP</span><span id="wip">-</span></div>
   <div style="margin-top:8px">
@@ -178,7 +203,7 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
 </section>
 
 <section>
-  <h2 data-k="time"></h2>
+  <h2><span data-k="time"></span><button class="hbtn" onclick="showHelp('time')">?</button></h2>
   <div class="kv"><span data-k="devtime"></span><span id="now">-</span></div>
   <div style="margin-top:8px">
     <div class="radio"><input type="radio" name="tm" id="tm_ntp" checked
@@ -196,14 +221,22 @@ border-radius:12px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 2
 </section>
 
 <section>
-  <h2 data-k="advanced"></h2>
+  <h2><span data-k="advanced"></span><button class="hbtn" onclick="showHelp('adv')">?</button></h2>
   <label class="chk" style="margin-bottom:12px"><input type="checkbox" id="ledon" onchange="ledSave()"><span data-k="ledOn"></span></label>
   <button class="sec" style="width:100%;margin-bottom:10px"
     onclick="location.href='/?setup=1'" data-k="wizBtn"></button>
   <button class="danger" onclick="factory()" data-k="factory"></button>
 </section>
 
-</div><div id="toast"></div><script>
+</div>
+<div class="modalbg" id="helpbg" onclick="if(event.target===this)closeHelp()">
+  <div class="modal">
+    <button class="mclose" onclick="closeHelp()">×</button>
+    <h3 id="helpT"></h3>
+    <div id="helpB" class="helpbody"></div>
+  </div>
+</div>
+<div id="toast"></div><script>
 var D={
 en:{remote:'Remote',on:'Turn ON',off:'Turn OFF',eco:'ECO mode',send:'Send',rec:'Record',
 recorded:'Recorded',empty:'Not recorded',noCode:'Record this button first.',
@@ -217,6 +250,8 @@ rTitle:'Remote access',
 rDesc:'Control this AC from anywhere over the internet using your personal link.',
 rLink:'Your personal link',copy:'Copy',copied:'Link copied.',
 rWarn:'⚠ Save this link! The ERemote Wi-Fi turns off a few minutes after setup to rest the device; afterwards you reach the AC through this link.',
+pinStatus:'Link PIN',pinOn:'Protected',pinOff:'Not set',pinChange:'Set / change PIN',
+pinNew:'New 4-digit PIN (leave blank and press Remove to clear it)',pinRemove:'Remove PIN',
 rOn:'Connected to server',rOff:'Not connected',
 rWait:'Waiting for internet connection to set up remote access…',
 rErrNet:'Cannot reach the server — check the server address, that it is running, and that port 80 is open.',
@@ -241,7 +276,21 @@ advanced:'Advanced',factory:'Factory reset',
 factoryMsg:'Erase EVERYTHING (codes, Wi-Fi, schedules)?',
 saved:'Saved.',err:'Error — try again.',lang:'عربي',
 dayS:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
-actS:{on:'ON',off:'OFF',eco:'ECO'}},
+actS:{on:'ON',off:'OFF',eco:'ECO'},
+h_remoteT:'Remote control',
+h_remote:'Send replays the recorded signal to the AC right now.\n\nRecord captures a button from your AC’s own remote — point it at the black dot on the device and press the button within 30 seconds. Recording again overwrites the old code for that button.',
+h_accessT:'Remote access',
+h_access:'Once online, this device gets a personal link (er.my.to/r/CODE) that works from anywhere, not just your home Wi-Fi.\n\nAnyone with the link — and its PIN, if you set one — can control this AC, so treat the link like a password.\n\nIf you ever share the code by mistake, set or change the PIN below. Even a factory reset keeps this device’s code the same on purpose (so your link never breaks), so the PIN is the real fix for an accidentally-shared code.',
+h_gensetT:'AutoGenset',
+h_genset:'Watches for the Wi-Fi network broadcast by a small GENSET_ACTIVE emitter at your neighborhood generator.\n\n“When the generator turns ON” fires after the delay once that network appears — ECO saves the generator’s amps, OFF turns the AC off entirely.\n“When the generator turns OFF” fires once the network disappears — handy for turning the AC back ON automatically when grid power returns.\n\nThe ECO checkbox sends ON first, then ECO a moment later, because on most remotes the ECO button only works while the unit is already running.',
+h_schedT:'Schedules',
+h_sched:'Runs ON, OFF, or ECO automatically at a chosen time on the days you pick. Add as many as you like; tap × next to one to remove it.',
+h_wifiT:'Wi-Fi',
+h_wifi:'The home network this device joins for internet access — needed for the clock and the remote link. Pick a network from the list, or choose “Other network…” to type a hidden network’s name yourself. “Forget network” disconnects and clears the saved password.',
+h_timeT:'Time & clock',
+h_time:'Automatic uses internet time and needs Wi-Fi. Set manually lets you type the date and time yourself if there’s no internet. The time zone affects exactly when schedules fire.',
+h_advT:'Advanced',
+h_adv:'The LED option blinks the device’s built-in light for about a second every time it sends an IR command, as a visual confirmation.\n\n“Run setup wizard” re-opens the guided step-by-step setup at any time.\n\nFactory reset erases everything on this device — recorded buttons, Wi-Fi, schedules, and settings — and restarts the wizard. It does NOT change this device’s permanent code or link.'},
 ar:{remote:'التحكم',on:'تشغيل',off:'إطفاء',eco:'الوضع الاقتصادي',send:'إرسال',rec:'تسجيل',
 recorded:'مسجَّل',empty:'غير مسجَّل',noCode:'سجِّل هذا الزر أولاً.',
 recording:'وجِّه ريموت المكيف نحو الجهاز واضغط الزر الآن…',
@@ -254,6 +303,8 @@ rTitle:'التحكم عن بُعد',
 rDesc:'تحكم بهذا المكيف من أي مكان عبر الإنترنت باستخدام رابطك الخاص.',
 rLink:'رابطك الخاص',copy:'نسخ',copied:'تم نسخ الرابط.',
 rWarn:'⚠ احفظ هذا الرابط! تنطفئ شبكة ERemote بعد دقائق من الإعداد لإراحة الجهاز؛ بعدها تصل للمكيف عبر هذا الرابط.',
+pinStatus:'رمز حماية الرابط',pinOn:'محمي',pinOff:'غير مفعَّل',pinChange:'تعيين / تغيير الرمز',
+pinNew:'رمز جديد من ٤ أرقام (اتركه فارغاً واضغط إزالة لحذفه)',pinRemove:'إزالة الرمز',
 rOn:'متصل بالخادم',rOff:'غير متصل',
 rWait:'بانتظار الاتصال بالإنترنت لإعداد التحكم عن بُعد…',
 rErrNet:'تعذّر الوصول للخادم — تحقق من عنوان الخادم وأنه يعمل وأن المنفذ 80 مفتوح.',
@@ -278,7 +329,21 @@ advanced:'متقدم',factory:'إعادة ضبط المصنع',
 factoryMsg:'مسح كل شيء (الأكواد، الواي فاي، الجدولة)؟',
 saved:'تم الحفظ.',err:'خطأ — حاول مجدداً.',lang:'EN',
 dayS:['أحد','إثن','ثلا','أرب','خمي','جمع','سبت'],
-actS:{on:'تشغيل',off:'إطفاء',eco:'اقتصادي'}}};
+actS:{on:'تشغيل',off:'إطفاء',eco:'اقتصادي'},
+h_remoteT:'التحكم عن بُعد',
+h_remote:'إرسال يعيد إرسال الإشارة المسجَّلة للمكيف فوراً.\n\nتسجيل يلتقط زراً من ريموت المكيف نفسه — وجّهه نحو النقطة السوداء على الجهاز واضغط الزر خلال ٣٠ ثانية. إعادة التسجيل تستبدل الكود القديم لذلك الزر.',
+h_accessT:'التحكم عن بُعد',
+h_access:'بمجرد اتصال الجهاز بالإنترنت، يحصل على رابط خاص (er.my.to/r/CODE) يعمل من أي مكان، وليس فقط ضمن واي فاي منزلك.\n\nأي شخص يملك الرابط — ورمز PIN إن قمت بتعيينه — يستطيع التحكم بالمكيف، لذا تعامل مع الرابط كأنه كلمة مرور.\n\nإذا شاركت الرمز بالخطأ مع أحد، عيّن أو غيّر رمز PIN أدناه. حتى إعادة ضبط المصنع تُبقي رمز هذا الجهاز كما هو عمداً (ليبقى رابطك صالحاً دائماً)، لذا رمز PIN هو الحل الحقيقي لمشاركة الرمز بالخطأ.',
+h_gensetT:'كشف المولّدة تلقائياً',
+h_genset:'يراقب شبكة الواي فاي التي يبثّها جهاز صغير باسم GENSET_ACTIVE عند مولّدة الحي.\n\n"عند تشغيل المولّدة" يُنفَّذ بعد التأخير المحدد فور ظهور تلك الشبكة — الاقتصادي يوفّر أمبيرات المولّدة، والإطفاء يطفئ المكيف بالكامل.\n"عند إطفاء المولّدة" يُنفَّذ فور اختفاء الشبكة — مفيد لتشغيل المكيف تلقائياً عند عودة كهرباء الشبكة العامة.\n\nخيار الاقتصادي يرسل التشغيل أولاً ثم الاقتصادي بعد لحظة، لأن زر الاقتصادي في أغلب الريموتات يعمل فقط والمكيف يعمل بالفعل.',
+h_schedT:'الجدولة',
+h_sched:'ينفّذ تشغيل أو إطفاء أو اقتصادي تلقائياً في وقت محدد وفي الأيام التي تختارها. أضف ما تشاء من الجدولات؛ اضغط × بجانب أي جدولة لحذفها.',
+h_wifiT:'الواي فاي',
+h_wifi:'شبكة المنزل التي ينضم إليها الجهاز للوصول للإنترنت — لازمة للساعة وللرابط عن بُعد. اختر شبكة من القائمة، أو اختر "شبكة أخرى…" لكتابة اسم شبكة مخفية بنفسك. "نسيان الشبكة" يقطع الاتصال ويمسح كلمة المرور المحفوظة.',
+h_timeT:'الوقت والساعة',
+h_time:'تلقائي يستخدم وقت الإنترنت ويحتاج واي فاي. ضبط يدوي يتيح لك كتابة التاريخ والوقت بنفسك إن لم يوجد إنترنت. المنطقة الزمنية تحدد التوقيت الدقيق لتنفيذ الجدولات.',
+h_advT:'متقدم',
+h_adv:'خيار المؤشر الضوئي يجعل الضوء المدمج في الجهاز يومض لثانية تقريباً عند كل إرسال لأمر IR، كتأكيد بصري.\n\n"إعادة تشغيل معالج الإعداد" يفتح معالج الإعداد التدريجي من جديد في أي وقت.\n\nإعادة ضبط المصنع تمسح كل شيء في الجهاز — الأزرار المسجّلة، الواي فاي، الجدولة، والإعدادات — وتعيد تشغيل المعالج. هذا لا يغيّر رمز/رابط هذا الجهاز الدائم.'}};
 var L='ar',ST=null,selDays=[];
 var DELAYS=[3,5,10,15,30,60,120,300];   // seconds; labels come from delayS
 
@@ -286,6 +351,11 @@ function t(k){return D[L][k]}
 function $(id){return document.getElementById(id)}
 function toast(m){var e=$('toast');e.textContent=m;e.style.display='block';
 clearTimeout(e._t);e._t=setTimeout(function(){e.style.display='none'},3500)}
+
+function showHelp(k){$('helpT').textContent=t('h_'+k+'T');$('helpB').textContent=t('h_'+k);
+$('helpbg').classList.add('show')}
+function closeHelp(){$('helpbg').classList.remove('show')}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeHelp()});
 
 function setLang(l){L=l;try{localStorage.setItem('erl',l)}catch(e){}
 document.documentElement.lang=l;document.documentElement.dir=(l=='ar')?'rtl':'ltr';
@@ -329,6 +399,8 @@ var rc=r.lastRc|0,e=$('rerr');
 if(rc===0){e.style.display='none'}
 else{e.style.display='block';
 e.textContent=rc<0?t('rErrNet'):rc==403?t('rErr403'):t('rErrHttp')+rc+')'}}
+$('pinst').textContent=ST.linkPinSet?t('pinOn'):t('pinOff');
+$('pinst').style.color=ST.linkPinSet?'var(--ok)':'var(--mut)';
 var sl=$('slist');sl.innerHTML='';var arr=ST.schedules||[];
 if(!arr.length){sl.innerHTML='<div class="empty">'+t('none')+'</div>';return}
 arr.forEach(function(s){var d=document.createElement('div');d.className='sched';
@@ -416,6 +488,17 @@ $('w_ssid').value='';$('w_pass').value='';toast(t('saved'));refresh()}catch(e){t
 
 async function ledSave(){try{await fetch('/api/led',{method:'POST',
 body:JSON.stringify({ledOn:$('ledon').checked})});toast(t('saved'))}catch(e){toast(t('err'))}}
+
+function togglePinForm(){var f=$('pinform');f.style.display=f.style.display==='none'?'block':'none'}
+async function savePin(){var p=$('pin_new').value.trim();
+if(!/^[0-9]{4}$/.test(p)){toast(t('err'));return}
+try{var r=await fetch('/api/linkpin',{method:'POST',body:JSON.stringify({pin:p})});
+toast(r.ok?t('saved'):t('err'));$('pin_new').value='';togglePinForm();setTimeout(refresh,500)}
+catch(e){toast(t('err'))}}
+async function removePin(){
+try{var r=await fetch('/api/linkpin',{method:'POST',body:JSON.stringify({pin:''})});
+toast(r.ok?t('saved'):t('err'));$('pin_new').value='';togglePinForm();setTimeout(refresh,500)}
+catch(e){toast(t('err'))}}
 async function gsSave(){
 var m=document.querySelector('input[name="gs"]:checked').value;
 var om=document.querySelector('input[name="gso"]:checked').value;

@@ -25,8 +25,15 @@ hijack (see below).
 Request body:
 
 ```json
-{ "id": "d9a3b7c", "secret": "<32 hex>", "fw": "1.0" }
+{ "id": "d9a3b7c", "secret": "<32 hex>", "fw": "1.0",
+  "linkPin": "", "domain": "bldg1", "pin": "1234" }
 ```
+
+`linkPin` (optional 4-digit string, `""` = none) is sent on every claim by
+firmware that supports it, even when empty — see "Link PIN" below.
+`domain`/`pin` are only sent when the device joined a fleet domain during
+setup; firmware that predates a field simply omits it, which the server
+treats as "leave whatever's already stored alone," never as "clear it."
 
 Responses:
 
@@ -68,9 +75,25 @@ claims again (identity stored in EEPROM).
 ## Web page (browser ↔ server, HTTPS via Caddy)
 
 - `GET /r/<code>` — the control page (404 for unknown codes; heavily
-  rate-limited per IP to make 6-char code guessing impractical).
+  rate-limited per IP to make 6-char code guessing impractical). Always
+  served regardless of link PIN — the page's own JS handles the gate.
 - `GET /api/r/<code>/state` — latest cached state + `lastSeen` (ms since
-  epoch) or `online:false` if never seen.
-- `POST /api/r/<code>/cmd` body `{"btn":"on"}` — publish to the device.
-- `GET /api/r/<code>/events` — Server-Sent Events stream; each event is the
-  same JSON as `/state`, pushed whenever the device publishes.
+  epoch) or `online:false` if never seen. `401 {"error":"pin-required"}`
+  if the device has a link PIN set and this browser hasn't unlocked it.
+- `POST /api/r/<code>/cmd` body `{"btn":"on"}` (or `{"a":...}`, see the
+  action set in `app.js`) — publish to the device. Same 401 gate as state.
+- `GET /api/r/<code>/events` — Server-Sent Events stream; same JSON as
+  `/state`, pushed whenever the device publishes. Same 401 gate.
+
+## Link PIN (optional, protects `/r/<code>`)
+
+Because a device's code/link survives factory reset by design (so it never
+changes for the customer), an accidentally-shared code has no code-side fix.
+An optional 4-digit PIN, set from the wizard or the portal, is the remedy:
+
+- `POST /api/r/<code>/unlock` body `{"pin":"1234"}` — on match, sets an
+  httpOnly cookie (`erpin_<code>`, 30 days) this browser then sends
+  automatically to state/cmd/events. `200 {"ok":true}` immediately if the
+  device has no PIN set (nothing to unlock). `403` on a wrong PIN, `429`
+  once a code has had 8 wrong attempts within 10 minutes (15-minute
+  cooldown, tracked per code across all IPs, not per IP).
