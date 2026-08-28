@@ -82,6 +82,9 @@ var D={
 en:{
  bn_on:'ON',bn_off:'OFF',bn_eco:'ECO',
  wTitle:'Welcome to ERemote',wSub:'Your smart AC remote. Setup takes about two minutes. Choose your language:',
+ introTitle:'Before we start',
+ introBody:'This wizard will ask you to record three buttons — ON, OFF, and ECO — using your air conditioner’s own remote control. Go get it now and keep it in your hand. When asked, you’ll point it at the black dot on the device and press one button at a time.',
+ introBtn:'I have the remote — let’s go',
  recTitle:'Record the {B} button',
  recHow:'Bring the AC remote control. Point it at the black dot on the device, then press the {B} button once.',
  listening:'Listening… press the button now',
@@ -96,6 +99,9 @@ en:{
  dmTitle:'Building / fleet (optional)',
  dmDesc:'If this device is part of a set you control together (e.g. many rooms), join a domain to manage them from one console at er.my.to/console. Leave blank for a single device.',
  dmName:'Domain name',dmPin:'4-digit PIN',dmSkip:'Skip — single device',
+ pnTitle:'Protect your link with a PIN (optional)',
+ pnDesc:'If you ever share your device’s code with someone by mistake, a PIN keeps your link private. Even a factory reset keeps the same code, so this is the real fix for that. Leave blank to skip — you can add or change it later from the dashboard.',
+ pnPin:'4-digit PIN',pnSkip:'Skip — no PIN',
  fTitle:'Connect to home Wi-Fi',
  fSub:'Choose your home Wi-Fi so the device gets the correct time and can be controlled from the internet.',
  scanning:'Searching for networks…',refresh:'Search again',
@@ -129,6 +135,9 @@ en:{
 ar:{
  bn_on:'التشغيل',bn_off:'الإطفاء',bn_eco:'الاقتصادي',
  wTitle:'أهلاً بك في ERemote',wSub:'جهاز التحكم الذكي بالمكيف. الإعداد يستغرق دقيقتين تقريباً. اختر لغتك:',
+ introTitle:'قبل أن نبدأ',
+ introBody:'سيطلب منك المعالج تسجيل ثلاثة أزرار — التشغيل والإطفاء والاقتصادي — باستخدام ريموت المكيف نفسه. أحضره الآن وأمسكه بيدك. عند الطلب، ستوجّهه نحو النقطة السوداء على الجهاز وتضغط زراً واحداً في كل مرة.',
+ introBtn:'الريموت بيدي — لنبدأ',
  recTitle:'تسجيل زر {B}',
  recHow:'أحضر ريموت المكيف. وجّهه نحو النقطة السوداء على الجهاز، ثم اضغط زر {B} مرة واحدة.',
  listening:'جارٍ الاستماع… اضغط الزر الآن',
@@ -143,6 +152,9 @@ ar:{
  dmTitle:'مبنى / أسطول (اختياري)',
  dmDesc:'إذا كان هذا الجهاز ضمن مجموعة تتحكم بها معاً (عدة غرف مثلاً)، انضم إلى نطاق لإدارتها من لوحة واحدة على er.my.to/console. اتركه فارغاً لجهاز واحد.',
  dmName:'اسم النطاق',dmPin:'رمز من ٤ أرقام',dmSkip:'تخطَّ — جهاز واحد',
+ pnTitle:'احمِ رابطك برمز PIN (اختياري)',
+ pnDesc:'إذا شاركت رمز جهازك بالخطأ مع أحد، يُبقي رمز PIN رابطك خاصاً. حتى إعادة ضبط المصنع تُبقي نفس الرمز، لذا هذا هو الحل الحقيقي لتلك الحالة. اتركه فارغاً للتخطي — يمكنك إضافته أو تغييره لاحقاً من لوحة التحكم.',
+ pnPin:'رمز من ٤ أرقام',pnSkip:'تخطَّ — بدون رمز',
  fTitle:'الاتصال بواي فاي المنزل',
  fSub:'اختر شبكة الواي فاي في منزلك ليحصل الجهاز على الوقت الصحيح وتتمكن من التحكم به عبر الإنترنت.',
  scanning:'جارٍ البحث عن الشبكات…',refresh:'إعادة البحث',
@@ -192,16 +204,18 @@ async function getStatus(){try{var r=await fetch('/api/status');ST=await r.json(
 function codeSet(b){return !!(ST&&ST.codes&&ST.codes[b]&&ST.codes[b].set)}
 
 /* ---------- navigation ---------- */
-var STEPS=['on','off','eco','wifi','genset','domain','done'];
+var STEPS=['on','off','eco','wifi','genset','domain','pin','done'];
 function dots(i){var d=$('dots');d.style.display='flex';d.innerHTML='';
 for(var k=0;k<STEPS.length;k++){var s=document.createElement('div');
 s.className='dot'+(k<i?' done':k==i?' act':'');d.appendChild(s)}}
 function go(id){clearTimers();cur=id;
 if(id=='welcome')showWelcome();
+else if(id=='intro')showIntro();
 else if(id=='on'||id=='off'||id=='eco')showRecord(id);
 else if(id=='wifi')showWifi();
 else if(id=='genset')showGenset();
 else if(id=='domain')showDomain();
+else if(id=='pin')showLinkPin();
 else if(id=='done')showDone()}
 function nextOf(id){return STEPS[STEPS.indexOf(id)+1]}
 
@@ -211,7 +225,13 @@ h('<div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 '<h1>'+t('wTitle')+'</h1><p>'+t('wSub')+'</p>'+
 '<div class="big2"><button onclick="pickLang(\'ar\')">العربية</button>'+
 '<button onclick="pickLang(\'en\')">English</button></div>')}
-function pickLang(l){setLang(l,false);$('langbtn').style.display='block';go('on')}
+function pickLang(l){setLang(l,false);$('langbtn').style.display='block';go('intro')}
+
+/* ---------- intro (what's about to happen) ---------- */
+function showIntro(){$('dots').style.display='none';
+h('<div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16v9H4z"/><path d="M8 19h8M12 15v4"/><circle cx="8" cy="10.5" r="1"/><path d="M12 9v3M16 9v3"/></svg></div>'+
+'<h1>'+t('introTitle')+'</h1><p>'+t('introBody')+'</p>'+
+'<button class="pri" onclick="go(\'on\')">'+t('introBtn')+'</button>')}
 
 /* ---------- record steps ---------- */
 function recHdr(b){return '<h1>'+t('recTitle').replace('{B}',t('bn_'+b))+'</h1>'}
@@ -348,18 +368,31 @@ h('<h1>'+t('dmTitle')+'</h1><p>'+t('dmDesc')+'</p>'+
 '<label>'+t('dmName')+'</label><input id="dm_name" maxlength="24" autocapitalize="off" placeholder="building1">'+
 '<label>'+t('dmPin')+'</label><input id="dm_pin" type="tel" maxlength="4" inputmode="numeric" placeholder="0000">'+
 '<button class="pri" onclick="domainSave()">'+t('next')+'</button>'+
-'<button class="ghost" onclick="go(\'done\')">'+t('dmSkip')+'</button>');
+'<button class="ghost" onclick="go(\'pin\')">'+t('dmSkip')+'</button>');
 if(ST&&ST.domain)$('dm_name').value=ST.domain}
 async function domainSave(){
 var n=$('dm_name').value.trim().toLowerCase(),p=$('dm_pin').value.trim();
-if(!n){go('done');return}
+if(!n){go('pin');return}
 if(!/^[a-z0-9][a-z0-9-]{1,23}$/.test(n)||!/^[0-9]{4}$/.test(p)){
 var e=$('dm_pin');e.style.borderColor='var(--bad)';return}
 try{await fetch('/api/domain',{method:'POST',body:JSON.stringify({name:n,pin:p})})}catch(e){}
+go('pin')}
+
+/* ---------- link PIN (optional; protects the personal link) ---------- */
+function showLinkPin(){dots(6);
+h('<h1>'+t('pnTitle')+'</h1><p>'+t('pnDesc')+'</p>'+
+'<label>'+t('pnPin')+'</label><input id="pn_pin" type="tel" maxlength="4" inputmode="numeric" placeholder="0000">'+
+'<button class="pri" onclick="linkPinSave()">'+t('next')+'</button>'+
+'<button class="ghost" onclick="go(\'done\')">'+t('pnSkip')+'</button>')}
+async function linkPinSave(){
+var p=$('pn_pin').value.trim();
+if(!p){go('done');return}
+if(!/^[0-9]{4}$/.test(p)){var e=$('pn_pin');e.style.borderColor='var(--bad)';return}
+try{await fetch('/api/linkpin',{method:'POST',body:JSON.stringify({pin:p})})}catch(e){}
 go('done')}
 
 /* ---------- done ---------- */
-async function showDone(){dots(6);
+async function showDone(){dots(7);
 try{await fetch('/api/init',{method:'POST'})}catch(e){}
 await getStatus();
 renderDoneCard();

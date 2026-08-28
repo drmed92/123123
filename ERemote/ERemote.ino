@@ -152,6 +152,12 @@ struct Config {
   // Optional fleet domain: joined during setup, sent with the claim so the
   // server groups this device. Empty = standalone (unchanged behaviour).
   String domainName = "", domainPin = "";
+  // Optional 4-digit PIN gating the personal /r/CODE link. The device keeps
+  // its code/link across factory reset by design (link-for-life), so this is
+  // the remedy if a code is ever shared by mistake: empty = no extra gate
+  // (unchanged behaviour); set = the server won't show state/accept commands
+  // on the link until the PIN is entered once per browser.
+  String linkPin = "";
 } cfg;
 
 // Runtime state
@@ -262,6 +268,7 @@ void saveConfig(){
   d["gsSsid"]=cfg.gsSsid; d["gsDelay"]=cfg.gsDelay; d["gsChannel"]=cfg.gsChannel;
   d["ecoOn"]=cfg.ecoNeedsOn; d["ledOn"]=cfg.ledEnabled;
   d["dom"]=cfg.domainName; d["pin"]=cfg.domainPin;
+  d["lpin"]=cfg.linkPin;
   File f=LittleFS.open("/config.json","w"); if(f){ serializeJson(d,f); f.close(); }
 }
 void loadConfig(){
@@ -273,6 +280,7 @@ void loadConfig(){
     cfg.gsChannel=d["gsChannel"]|6; cfg.ecoNeedsOn=d["ecoOn"]|false;
     cfg.ledEnabled=d["ledOn"]|true;
     cfg.domainName=d["dom"]|""; cfg.domainPin=d["pin"]|"";
+    cfg.linkPin=d["lpin"]|"";
     provisioned=true;
   }
   f.close();
@@ -470,6 +478,7 @@ void handleStatus(){
 
   d["ledOn"]=cfg.ledEnabled;
   d["domain"]=cfg.domainName;
+  d["linkPinSet"]=cfg.linkPin.length()>0;   // never send the PIN itself back
 
   d["genset"]["mode"]=cfg.gsMode;
   d["genset"]["offMode"]=cfg.gsOffMode;
@@ -587,6 +596,17 @@ void handleDomain(){                                 // wizard: join/set fleet d
   cfg.domainName.toLowerCase();
   saveConfig();
   claimSynced=false; lastClaimAt=0; claimTries=0;    // re-claim so the join registers
+  sendJson(200,"{\"ok\":true}");
+}
+void handleLinkPin(){          // set/change/clear the PIN gating the personal link
+  JsonDocument d; if(!bodyJson(d)){ sendJson(400,"{\"ok\":false}"); return; }
+  String p=(const char*)(d["pin"]|"");
+  if(p.length() && (p.length()!=4 || !isdigit((unsigned char)p[0]) ||
+     !isdigit((unsigned char)p[1]) || !isdigit((unsigned char)p[2]) || !isdigit((unsigned char)p[3]))){
+    sendJson(400,"{\"ok\":false,\"error\":\"bad-pin\"}"); return;
+  }
+  cfg.linkPin=p; saveConfig();
+  claimSynced=false; lastClaimAt=0; claimTries=0;    // re-claim so the server learns it
   sendJson(200,"{\"ok\":true}");
 }
 void handleSchedGet(){
@@ -817,6 +837,8 @@ void claimTask(){
   http.addHeader("Content-Type","application/json");
   JsonDocument d; d["id"]=devId; d["secret"]=ident.secret; d["fw"]="1.0";
   if(cfg.domainName.length()){ d["domain"]=cfg.domainName; d["pin"]=cfg.domainPin; }
+  d["linkPin"]=cfg.linkPin;   // always sent (may be ""), so the server can
+                               // tell "explicitly no PIN" from old firmware
   String body; serializeJson(d,body);
   int rc=http.POST(body);
   lastClaimRc=rc;                  // negative = HTTPClient error (unreachable etc.)
@@ -995,6 +1017,7 @@ void setup(){
   server.on("/api/genset",    HTTP_POST,   handleGenset);
   server.on("/api/led",       HTTP_POST,   handleLed);
   server.on("/api/domain",    HTTP_POST,   handleDomain);
+  server.on("/api/linkpin",   HTTP_POST,   handleLinkPin);
   server.on("/api/schedule",  HTTP_GET,    handleSchedGet);
   server.on("/api/schedule",  HTTP_POST,   handleSchedPost);
   server.on("/api/schedule",  HTTP_DELETE, handleSchedDel);

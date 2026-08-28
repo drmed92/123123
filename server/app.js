@@ -34,11 +34,11 @@ const MQTT_HOST  = process.env.MQTT_PUBLIC_HOST || new URL(BASE_URL).hostname;
 const DATA_FILE  = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 
 /* ------------------------------- device DB ------------------------------- */
-// { devices: { id: { secret, code, createdAt, domain?, name?, profile? } },
+// { devices: { id: { secret, code, createdAt, domain?, name?, profile?, linkPin? } },
 //   codes:   { CODE: id },
 //   domains: { name: { pin, createdAt, library: { profile: {on,off,eco} } } } }
-// domain/name/profile and the whole domains map are OPTIONAL: devices claimed
-// before fleet support simply lack them and behave exactly as before.
+// domain/name/profile/linkPin and the whole domains map are OPTIONAL: devices
+// claimed before these features simply lack them and behave exactly as before.
 let db = { devices: {}, codes: {}, domains: {} };
 try { db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) { /* first run */ }
 if (!db.devices) db.devices = {};
@@ -183,6 +183,22 @@ app.post('/api/claim', (req, res) => {
     if (dev.domain !== dom) { dev.domain = dom; console.log(`[domain] ${id} -> ${dom}`); }
     dirty = true;
   }
+
+  // Optional link PIN, gating the personal /r/CODE page against an
+  // accidentally-shared code. Firmware that supports it always sends the
+  // field (possibly ""); firmware that doesn't omits it entirely -> no-op,
+  // so an existing PIN set some other way (there isn't one yet, but this
+  // keeps the door open) is never silently cleared by an old device.
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'linkPin')) {
+    const lp = String(req.body.linkPin || '');
+    if (lp && !PIN_RE.test(lp))
+      return res.status(400).json({ ok: false, error: 'bad-linkpin' });
+    if ((dev.linkPin || '') !== lp) {
+      dev.linkPin = lp;
+      dirty = true;
+      console.log(`[linkpin] ${id} ${lp ? 'set' : 'cleared'}`);
+    }
+  }
   if (dirty) saveDb();
   // Always hand back an https link on the public domain. Prefer the Host the
   // device actually reached us on (er.my.to via Caddy); fall back to BASE_URL.
@@ -198,13 +214,97 @@ app.post('/api/claim', (req, res) => {
 });
 
 /* ---- customer control page + APIs ---- */
+
+// Optional link-PIN gate: protects a device's personal page/API if its code
+// was ever shared by mistake. The device's identity (and code) survives a
+// factory reset by design, so resetting doesn't help there -- a PIN set from
+// the portal or wizard is the remedy, and it lives server-side so a browser
+// that never entered it can't read state or send commands even knowing the
+// code. No PIN set (the default) means the page behaves exactly as before.
+function parseCookies(req) {
+  const out = {};
+  const h = req.headers.cookie;
+  if (!h) return out;
+  for (const part of h.split(';')) {
+    const i = part.indexOf('=');
+    if (i < 0) continue;
+    out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return out;
+}
+const pinSessions = new Map();   // token -> { id, expires }
+const PIN_SESSION_MS = 30 * 24 * 3600000;   // 30 days
+setInterval(() => {
+  const now = Date.now();
+  for (const [t, s] of pinSessions) if (now > s.expires) pinSessions.delete(t);
+}, 3600000).unref();
+
+// Failed-unlock lockout, keyed by CODE (not IP) since the code itself is
+// what's protected: 8 wrong tries in 10 min locks that code out for 15 min,
+// regardless of which IP is trying.
+const pinFails = new Map();      // code -> { n, resetAt, lockUntil }
+function pinLockedUntil(code) {
+  const e = pinFails.get(code);
+  return (e && e.lockUntil > Date.now()) ? e.lockUntil : 0;
+}
+function notePinFail(code) {
+  const now = Date.now();
+  let e = pinFails.get(code);
+  if (!e || now > e.resetAt) e = { n: 0, resetAt: now + 600000, lockUntil: 0 };
+  e.n++;
+  if (e.n >= 8) e.lockUntil = now + 900000;
+  pinFails.set(code, e);
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [c, e] of pinFails) if (now > e.resetAt && now > e.lockUntil) pinFails.delete(c);
+}, 600000).unref();
+
+function lookupId(code) { return db.codes[String(code || '').toUpperCase()] || null; }
+
+// Gate for state/cmd/events: 404 if the code doesn't exist, 401 if it exists
+// but needs a PIN this browser hasn't unlocked, else attaches req.devId.
+function requireUnlocked(req, res, next) {
+  const id = lookupId(req.params.code);
+  if (!id) return setTimeout(() => res.status(404).send('Not found'), 500);
+  const dev = db.devices[id];
+  if (!dev.linkPin) { req.devId = id; return next(); }
+  const token = parseCookies(req)['erpin_' + dev.code];
+  const sess = token && pinSessions.get(token);
+  if (sess && sess.id === id && Date.now() < sess.expires) { req.devId = id; return next(); }
+  res.status(401).json({ ok: false, error: 'pin-required' });
+}
+
 app.get('/r/:code', rateLimit, (req, res) => {
   findByCode(req, res, () =>
     res.sendFile(path.join(__dirname, 'public', 'remote.html')));
 });
 
-app.get('/api/r/:code/state', rateLimit, (req, res) => {
-  findByCode(req, res, (id) => res.json(snapshot(id)));
+// Submit the link PIN; on success sets a cookie this browser reuses for 30
+// days. A no-op success if the device has no PIN set.
+app.post('/api/r/:code/unlock', rateLimit, (req, res) => {
+  const id = lookupId(req.params.code);
+  if (!id) return setTimeout(() => res.status(404).send('Not found'), 500);
+  const dev = db.devices[id];
+  if (!dev.linkPin) return res.json({ ok: true });
+  const lockUntil = pinLockedUntil(dev.code);
+  if (lockUntil) return res.status(429).json({ ok: false, error: 'locked', retryAt: lockUntil });
+  const pin = String((req.body || {}).pin || '');
+  if (pin !== dev.linkPin) {
+    notePinFail(dev.code);
+    return setTimeout(() => res.status(403).json({ ok: false, error: 'bad-pin' }), 400);
+  }
+  pinFails.delete(dev.code);
+  const token = crypto.randomBytes(24).toString('base64url');
+  pinSessions.set(token, { id, expires: Date.now() + PIN_SESSION_MS });
+  const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  res.setHeader('Set-Cookie', `erpin_${dev.code}=${token}; Path=/; HttpOnly; ` +
+    `SameSite=Lax; Max-Age=${PIN_SESSION_MS / 1000}${secure ? '; Secure' : ''}`);
+  res.json({ ok: true });
+});
+
+app.get('/api/r/:code/state', rateLimit, requireUnlocked, (req, res) => {
+  res.json(snapshot(req.devId));
 });
 
 // Relay a command to the device. Accepts either {btn} (simple send) or a
@@ -212,32 +312,29 @@ app.get('/api/r/:code/state', rateLimit, (req, res) => {
 // sched_del) so the personal link has portal parity. Wi-Fi is intentionally
 // not relayable (see firmware note). The device validates everything.
 const ACTIONS = ['send', 'genset', 'time', 'sched_add', 'sched_del', 'led'];
-app.post('/api/r/:code/cmd', rateLimit, (req, res) => {
-  findByCode(req, res, (id) => {
-    const body = req.body || {};
-    let msg = null;
-    if (typeof body.a === 'string' && ACTIONS.includes(body.a)) msg = body;
-    else if (BTNS.includes(String(body.btn || ''))) msg = { a: 'send', btn: body.btn };
-    if (!msg) return res.status(400).json({ ok: false });
-    aedes.publish({ topic: `er/${id}/cmd`, payload: JSON.stringify(msg),
-                    qos: 0, retain: false }, () => {});
-    res.json({ ok: true });
-  });
+app.post('/api/r/:code/cmd', rateLimit, requireUnlocked, (req, res) => {
+  const body = req.body || {};
+  let msg = null;
+  if (typeof body.a === 'string' && ACTIONS.includes(body.a)) msg = body;
+  else if (BTNS.includes(String(body.btn || ''))) msg = { a: 'send', btn: body.btn };
+  if (!msg) return res.status(400).json({ ok: false });
+  aedes.publish({ topic: `er/${req.devId}/cmd`, payload: JSON.stringify(msg),
+                  qos: 0, retain: false }, () => {});
+  res.json({ ok: true });
 });
 
-app.get('/api/r/:code/events', rateLimit, (req, res) => {
-  findByCode(req, res, (id) => {
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    });
-    res.write(`data: ${JSON.stringify(snapshot(id))}\n\n`);
-    if (!sseClients.has(id)) sseClients.set(id, new Set());
-    sseClients.get(id).add(res);
-    const hb = setInterval(() => res.write(': hb\n\n'), 25000);
-    req.on('close', () => { clearInterval(hb); sseClients.get(id).delete(res); });
+app.get('/api/r/:code/events', rateLimit, requireUnlocked, (req, res) => {
+  const id = req.devId;
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
   });
+  res.write(`data: ${JSON.stringify(snapshot(id))}\n\n`);
+  if (!sseClients.has(id)) sseClients.set(id, new Set());
+  sseClients.get(id).add(res);
+  const hb = setInterval(() => res.write(': hb\n\n'), 25000);
+  req.on('close', () => { clearInterval(hb); sseClients.get(id).delete(res); });
 });
 
 /* =============================== fleet console ============================ */

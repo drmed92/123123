@@ -61,6 +61,28 @@ align-items:start;padding:10px 16px 40px}
 .wrap>header,.wrap>.off-note{grid-column:1/-1}
 .wrap>section{margin-bottom:0}
 }
+.hbtn{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;
+background:var(--line);color:var(--mut);font-size:12px;font-weight:800;border:0;cursor:pointer;
+padding:0;flex:none;font-family:inherit}
+.modalbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;
+align-items:center;justify-content:center;padding:20px}
+.modalbg.show{display:flex}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;
+max-width:380px;width:100%;max-height:80vh;overflow:auto;position:relative;
+box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.mclose{position:absolute;top:10px;inset-inline-end:10px;background:var(--line);color:var(--txt);
+border:0;border-radius:50%;width:30px;height:30px;font-size:18px;line-height:1;padding:0;cursor:pointer}
+.modal h3{margin:0 30px 10px 0;font-size:17px}
+.helpbody{color:var(--mut);font-size:14.5px;line-height:1.7;white-space:pre-line}
+.pingate{display:none;position:fixed;inset:0;background:var(--bg);z-index:70;
+align-items:center;justify-content:center;padding:20px}
+.pingate.show{display:flex}
+.pincard{max-width:340px;width:100%;background:var(--card);border:1px solid var(--line);
+border-radius:16px;padding:24px;text-align:center}
+.pincard h2{justify-content:center;margin-bottom:8px}
+.pincard p{color:var(--mut);font-size:14.5px;line-height:1.6;margin:0 0 16px}
+.pincard input{text-align:center;letter-spacing:.4em;font-size:22px}
+.pgerr{color:var(--bad);font-size:14px;min-height:1.3em;margin:-4px 0 10px}
 </style></head><body><div class="wrap">
 
 <header>
@@ -91,7 +113,7 @@ align-items:start;padding:10px 16px 40px}
 </section>
 
 <section>
-  <h2 data-k="genTitle"></h2>
+  <h2><span data-k="genTitle"></span><button class="hbtn" onclick="showHelp('genset')">?</button></h2>
   <label data-k="gsOnHdr" style="font-weight:700;color:var(--txt);margin-bottom:6px"></label>
   <div class="radio"><input type="radio" name="gs" id="gs_dis" value="disabled">
     <label for="gs_dis" style="margin:0" data-k="gsDis"></label></div>
@@ -115,7 +137,7 @@ align-items:start;padding:10px 16px 40px}
 </section>
 
 <section>
-  <h2 data-k="schedules"></h2>
+  <h2><span data-k="schedules"></span><button class="hbtn" onclick="showHelp('sched')">?</button></h2>
   <div id="slist"></div>
   <div style="margin-top:12px">
     <div class="inline">
@@ -132,7 +154,7 @@ align-items:start;padding:10px 16px 40px}
 </section>
 
 <section>
-  <h2 data-k="timeTitle"></h2>
+  <h2><span data-k="timeTitle"></span><button class="hbtn" onclick="showHelp('time')">?</button></h2>
   <div class="radio"><input type="radio" name="tm" id="tm_ntp" onchange="manualBox()">
     <label for="tm_ntp" style="margin:0" data-k="ntp"></label></div>
   <div class="radio"><input type="radio" name="tm" id="tm_man" onchange="manualBox()">
@@ -147,10 +169,28 @@ align-items:start;padding:10px 16px 40px}
 </section>
 
 <section>
+  <h2><span data-k="advTitle"></span><button class="hbtn" onclick="showHelp('adv')">?</button></h2>
   <label class="chk"><input type="checkbox" id="ledon" onchange="saveLed()"><span data-k="ledOn"></span></label>
 </section>
 
-</div><div id="toast"></div><script>
+</div>
+<div class="modalbg" id="helpbg" onclick="if(event.target===this)closeHelp()">
+  <div class="modal">
+    <button class="mclose" onclick="closeHelp()">×</button>
+    <h3 id="helpT"></h3>
+    <div id="helpB" class="helpbody"></div>
+  </div>
+</div>
+<div class="pingate" id="pingate">
+  <div class="pincard">
+    <h2 data-k="pgTitle"></h2>
+    <p data-k="pgDesc"></p>
+    <input id="pg_pin" type="tel" maxlength="4" inputmode="numeric" placeholder="0000">
+    <div class="pgerr" id="pg_err"></div>
+    <button style="width:100%" onclick="submitPin()" data-k="pgSubmit"></button>
+  </div>
+</div>
+<div id="toast"></div><script>
 var D={
 en:{device:'Air conditioner',genset:'Generator',devtime:'Device time',
 on:'Turn ON',off:'Turn OFF',eco:'ECO mode',
@@ -161,13 +201,26 @@ offline2:'The device is offline. Changes will apply when it reconnects.',
 genTitle:'AutoGenset',gsDis:'Disabled',gsOn:'Turn AC ON',gsOff:'Turn AC OFF',gsEco:'Switch to ECO',
 gsOnHdr:'When the generator turns ON:',gsOffHdr:'When the generator turns OFF:',
 ecoOn:'ECO: turn the AC on first, then switch to ECO (needed on most units)',
-ledOn:'Blink the device LED when an IR command is sent',
+advTitle:'Advanced',ledOn:'Blink the device LED when an IR command is sent',
 gsDelay:'Delay before sending (seconds)',
 schedules:'Schedules',action:'Action',at:'Time',days:'Days',add:'Add schedule',
 none:'No schedules yet.',pickDay:'Pick at least one day.',
 timeTitle:'Time & clock',ntp:'Automatic (internet time)',manual:'Set manually',
 tz:'Time zone',apply:'Apply',baghdad:'Baghdad / Kuwait / Riyadh (GMT+3)',dubai:'Dubai (GMT+4)',
-lang:'عربي',dayS:['Sun','Mon','Tue','Wed','Thu','Fri','Sat']},
+lang:'عربي',dayS:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+h_gensetT:'AutoGenset',
+h_genset:'Watches for the Wi-Fi network broadcast by a small GENSET_ACTIVE emitter at your neighborhood generator.\n\n“When the generator turns ON” fires after the delay once that network appears — ECO saves the generator’s amps, OFF turns the AC off entirely.\n“When the generator turns OFF” fires once the network disappears — handy for turning the AC back ON automatically when grid power returns.\n\nThe ECO checkbox sends ON first, then ECO a moment later, because on most remotes the ECO button only works while the unit is already running.',
+h_schedT:'Schedules',
+h_sched:'Runs ON, OFF, or ECO automatically at a chosen time on the days you pick. Add as many as you like; tap × next to one to remove it.',
+h_timeT:'Time & clock',
+h_time:'Automatic uses internet time. Set manually lets you type the date and time yourself. The time zone affects exactly when schedules fire.',
+h_advT:'LED indicator',
+h_adv:'Blinks the device’s built-in light for about a second every time it sends an IR command, as a visual confirmation that the command went through.',
+pgTitle:'This link is protected',
+pgDesc:'Enter the 4-digit PIN to access this device.',
+pgSubmit:'Unlock',pgWrong:'Wrong PIN — try again.',
+pgLocked:'Too many attempts — wait a few minutes and try again.',
+pgBad:'Enter 4 digits.'},
 ar:{device:'المكيف',genset:'المولّدة',devtime:'وقت الجهاز',
 on:'تشغيل',off:'إطفاء',eco:'الوضع الاقتصادي',
 online:'متصل',offline:'غير متصل',det:'تعمل',nodet:'متوقفة',
@@ -177,19 +230,37 @@ offline2:'الجهاز غير متصل. ستُطبَّق التغييرات عن
 genTitle:'كشف المولّدة تلقائياً',gsDis:'معطَّل',gsOn:'تشغيل المكيف',gsOff:'إطفاء المكيف',gsEco:'التحويل للوضع الاقتصادي',
 gsOnHdr:'عند تشغيل المولّدة:',gsOffHdr:'عند إطفاء المولّدة:',
 ecoOn:'الوضع الاقتصادي: شغّل المكيف أولاً ثم حوّله للاقتصادي (لازم لأغلب المكيفات)',
-ledOn:'وميض مؤشر الجهاز الضوئي عند إرسال أمر',
+advTitle:'متقدم',ledOn:'وميض مؤشر الجهاز الضوئي عند إرسال أمر',
 gsDelay:'التأخير قبل الإرسال (بالثواني)',
 schedules:'الجدولة',action:'الإجراء',at:'الوقت',days:'الأيام',add:'إضافة جدولة',
 none:'لا توجد جدولات بعد.',pickDay:'اختر يوماً واحداً على الأقل.',
 timeTitle:'الوقت والساعة',ntp:'تلقائي (وقت الإنترنت)',manual:'ضبط يدوي',
 tz:'المنطقة الزمنية',apply:'تطبيق',baghdad:'بغداد / الكويت / الرياض (+3)',dubai:'دبي (+4)',
-lang:'EN',dayS:['أحد','إثن','ثلا','أرب','خمي','جمع','سبت']}};
+lang:'EN',dayS:['أحد','إثن','ثلا','أرب','خمي','جمع','سبت'],
+h_gensetT:'كشف المولّدة تلقائياً',
+h_genset:'يراقب شبكة الواي فاي التي يبثّها جهاز صغير باسم GENSET_ACTIVE عند مولّدة الحي.\n\n"عند تشغيل المولّدة" يُنفَّذ بعد التأخير المحدد فور ظهور تلك الشبكة — الاقتصادي يوفّر أمبيرات المولّدة، والإطفاء يطفئ المكيف بالكامل.\n"عند إطفاء المولّدة" يُنفَّذ فور اختفاء الشبكة — مفيد لتشغيل المكيف تلقائياً عند عودة كهرباء الشبكة العامة.\n\nخيار الاقتصادي يرسل التشغيل أولاً ثم الاقتصادي بعد لحظة، لأن زر الاقتصادي في أغلب الريموتات يعمل فقط والمكيف يعمل بالفعل.',
+h_schedT:'الجدولة',
+h_sched:'ينفّذ تشغيل أو إطفاء أو اقتصادي تلقائياً في وقت محدد وفي الأيام التي تختارها. أضف ما تشاء من الجدولات؛ اضغط × بجانب أي جدولة لحذفها.',
+h_timeT:'الوقت والساعة',
+h_time:'تلقائي يستخدم وقت الإنترنت. ضبط يدوي يتيح لك كتابة التاريخ والوقت بنفسك. المنطقة الزمنية تحدد التوقيت الدقيق لتنفيذ الجدولات.',
+h_advT:'مؤشر الـLED',
+h_adv:'يجعل الضوء المدمج في الجهاز يومض لثانية تقريباً عند كل إرسال لأمر IR، كتأكيد بصري بأن الأمر وصل.',
+pgTitle:'هذا الرابط محمي',
+pgDesc:'أدخل رمز PIN المكوَّن من ٤ أرقام للوصول إلى هذا الجهاز.',
+pgSubmit:'فتح',pgWrong:'رمز خاطئ — حاول مجدداً.',
+pgLocked:'محاولات كثيرة — انتظر بضع دقائق وحاول مجدداً.',
+pgBad:'أدخل ٤ أرقام.'}};
 var L='ar',ST=null,selDays=[],first=true,CODE=location.pathname.split('/').pop();
 
 function t(k){return D[L][k]}
 function $(id){return document.getElementById(id)}
 function toast(m){var e=$('toast');e.textContent=m;e.style.display='block';
 clearTimeout(e._t);e._t=setTimeout(function(){e.style.display='none'},3000)}
+
+function showHelp(k){$('helpT').textContent=t('h_'+k+'T');$('helpB').textContent=t('h_'+k);
+$('helpbg').classList.add('show')}
+function closeHelp(){$('helpbg').classList.remove('show')}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeHelp()});
 
 function setLang(l){L=l;try{localStorage.setItem('erl',l)}catch(e){}
 document.documentElement.lang=l;document.documentElement.dir=(l=='ar')?'rtl':'ltr';
@@ -251,12 +322,25 @@ async function saveTime(){var body={a:'time',ntp:$('tm_ntp').checked,tz:$('t_tz'
 if(!body.ntp){if(!$('t_iso').value){toast(t('err'));return}body.iso=$('t_iso').value}
 toast(await post(body)?t('saved'):t('err'))}
 
+var unlocked=false,listening=false;
 async function refresh(){try{var r=await fetch('/api/r/'+CODE+'/state');
-if(r.ok){ST=await r.json();render()}}catch(e){}}
+if(r.status===401){$('pingate').classList.add('show');return}
+if(r.ok){$('pingate').classList.remove('show');ST=await r.json();render();
+if(!listening){listening=true;listen()}}}catch(e){}}
 function listen(){try{var es=new EventSource('/api/r/'+CODE+'/events');
 es.onmessage=function(ev){try{ST=JSON.parse(ev.data);render()}catch(e){}};
-es.onerror=function(){es.close();setTimeout(listen,5000)}}catch(e){}}
+es.onerror=function(){es.close();listening=false;setTimeout(refresh,5000)}}catch(e){}}
+
+async function submitPin(){var p=$('pg_pin').value.trim(),e=$('pg_err');e.textContent='';
+if(!/^[0-9]{4}$/.test(p)){e.textContent=t('pgBad');return}
+try{var r=await fetch('/api/r/'+CODE+'/unlock',{method:'POST',
+headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:p})});
+if(r.status===429){e.textContent=t('pgLocked');return}
+var j=await r.json().catch(function(){return{ok:false}});
+if(r.ok&&j.ok){$('pg_pin').value='';refresh();return}
+e.textContent=t('pgWrong')}catch(x){e.textContent=t('err')}}
+$('pg_pin').addEventListener('keydown',function(e){if(e.key==='Enter')submitPin()});
 
 var s='ar';try{s=localStorage.getItem('erl')||'ar'}catch(e){}
-setLang(s);refresh();listen();setInterval(refresh,15000);
+setLang(s);refresh();setInterval(refresh,15000);
 </script></body></html>
