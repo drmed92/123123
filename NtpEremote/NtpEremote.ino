@@ -108,9 +108,12 @@ struct Config {
 bool     ledActive = false;
 uint32_t ledT0     = 0;
 
-// Clock + fire guard kept in RTC memory (survives deep sleep, not power loss)
-struct RtcState { uint32_t magic; uint32_t epoch; int16_t lastFiredMow; };
-const uint32_t RTC_MAGIC = 0x4E545031;   // "NTP1"
+// Clock + fire guard kept in RTC memory (survives deep sleep, not power loss).
+// drSince = dead-reckoned (un-NTP'd) sleep chunks since the last sync; capped so
+// drift can never compound across two blind sleeps and overshoot an event.
+struct RtcState { uint32_t magic; uint32_t epoch; int16_t lastFiredMow; uint16_t drSince; };
+const uint32_t RTC_MAGIC = 0x4E545032;   // "NTP2"
+const uint16_t MAX_DR_CHUNKS = 1;        // force an NTP re-sync after this many
 RtcState rtc;
 
 bool     setupMode    = true;   // AP + web portal up (programming window)
@@ -316,23 +319,31 @@ void runOnce(){
   uint32_t next=nextEventEpoch(est);
   int32_t  dt=(int32_t)(next-est);
 
+  // Re-sync NTP when we are close to an event OR when we have already dead-
+  // reckoned a full chunk since the last sync (so blind drift never compounds
+  // across two sleeps and overshoots — matters for gaps longer than one sleep).
+  bool mustSync = (dt <= (int32_t)NTP_LEAD_S) || (rtc.drSince >= MAX_DR_CHUNKS);
+  if(mustSync){
+    refreshTime();
+    rtc.drSince=0;
+    est=nowEpoch();
+    // Safety net: if drift landed us a few seconds INTO the target minute, fire
+    // it now rather than skip a whole week (lastFiredMow guards repeats).
+    { time_t tn=(time_t)est; struct tm* gn=gmtime(&tn);
+      fireDue(mowOf(gn->tm_wday,gn->tm_hour,gn->tm_min)); }
+    next=nextEventEpoch(est); dt=(int32_t)(next-est);
+  }
+
   if(dt > (int32_t)NTP_LEAD_S){
-    // Far from the event: pure dead reckoning, radio off, wake 20% early.
+    // Still far (either no sync was needed, or we just did a mid-flight sync):
+    // dead-reckon ONE margined chunk from the freshest clock we have.
+    rtc.drSince++;                                     // persisted by deepSleepSecs
     sleepTowardEarly(next);                            // never returns
   }
 
-  // Close to the event: re-sync NTP to erase drift, then re-plan precisely.
-  refreshTime();
-  est=nowEpoch();
-  // Safety net: if drift landed us a few seconds INTO the target minute, fire it
-  // now instead of skipping a whole week (fireDue's lastFiredMow guards repeats).
-  { time_t tn=(time_t)est; struct tm* gn=gmtime(&tn);
-    fireDue(mowOf(gn->tm_wday,gn->tm_hour,gn->tm_min)); }
-  next=nextEventEpoch(est); dt=(int32_t)(next-est);
-
   if(dt > (int32_t)HOLD_S){
-    // Still minutes out: short, accurate sleep to just inside the hold window.
-    // Next wake re-enters here, re-syncs once more, then holds & fires.
+    // Close and just synced: short, accurate sleep to just inside the hold
+    // window. Next wake re-syncs once more, then holds & fires.
     sleepTowardExact(next - HOLD_S + 5);               // never returns
   }
 
@@ -344,6 +355,7 @@ void runOnce(){
   while(ledActive){ ledTask(); delay(4); }             // let the heartbeat finish
 
   // Sleep toward the following event (skip the minute we just fired).
+  rtc.drSince=0;
   uint32_t after=nextEventEpoch(nowEpoch()+60);
   sleepTowardEarly(after);                             // never returns
 }
@@ -500,7 +512,7 @@ void setup(){
 
   // Restore clock from RTC memory (valid across deep sleep, lost on power cut)
   ESP.rtcUserMemoryRead(0,(uint32_t*)&rtc,sizeof(rtc));
-  if(rtc.magic!=RTC_MAGIC){ rtc.magic=RTC_MAGIC; rtc.epoch=0; rtc.lastFiredMow=-1; }
+  if(rtc.magic!=RTC_MAGIC){ rtc.magic=RTC_MAGIC; rtc.epoch=0; rtc.lastFiredMow=-1; rtc.drSince=0; }
   baseEpoch=rtc.epoch; baseMillis=millis(); haveTime=(baseEpoch>0);
 
   uint32_t reason = ESP.getResetInfoPtr()->reason;
@@ -543,9 +555,9 @@ void loop(){
     // Get the real time before the long sleep so the first event lands right.
     refreshTime();
     if(!haveTime){                                     // never synced -> nothing to schedule
-      deepSleepSecs(3600);                             // retry in an hour
+      deepSleepSecs(3600);                             // retry in an hour (never returns)
     }
-    uint32_t next=nextEventEpoch(nowEpoch());
-    sleepTowardEarly(next);                            // never returns
+    rtc.drSince=0;
+    runOnce();                                         // enter the scheduler; never returns
   }
 }
