@@ -1,0 +1,28 @@
+name: sumatra-pdftools exe
+
+on:
+  push:
+    paths: ['sumatra-pdftools/**', '.github/workflows/sumatra-pdftools.yml']
+  pull_request:
+    paths: ['sumatra-pdftools/**', '.github/workflows/sumatra-pdftools.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: sumatra-pdftools
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt pyinstaller
+      - run: python -m unittest -v test_pdftools
+      # --windowed: no console window when SumatraPDF starts it
+      - run: pyinstaller --onefile --windowed --name pdftools pdftools.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdftools-windows
+          path: sumatra-pdftools/dist/pdftools.exe

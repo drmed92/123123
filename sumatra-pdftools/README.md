@@ -34,7 +34,21 @@ are tagged the standard way in their own content stream, and watermark annotatio
 
 **Unlock** removes the open password (you must know it) and the print/copy/edit restrictions.
 
-## Install (Windows)
+## Portable exe (no Python needed)
+
+GitHub builds `pdftools.exe` on Windows (after running the tests there) on every push:
+repository **Actions** tab > **sumatra-pdftools exe** > latest run > download **pdftools-windows**.
+
+1. Put `pdftools.exe` in a folder it will stay in, e.g. next to a portable SumatraPDF.
+2. Double-click it. It writes `SumatraPDF-menu.txt` next to itself.
+3. In SumatraPDF: **Settings > Advanced Options...**, replace the `ExternalViewers [ ]` line with the contents
+   of that file, save, restart SumatraPDF.
+
+If you move the exe, double-click it again and paste the new block. Convert to Word and OCR are not in the exe
+(they need pdf2docx and Tesseract); everything else is. To build it yourself:
+`pip install -r requirements.txt pyinstaller` then `pyinstaller --onefile --windowed --name pdftools pdftools.py`.
+
+## Install with Python (Windows)
 
 1. Install Python 3 from python.org (Tk is included).
 2. `pip install -r requirements.txt` (add `pdf2docx` for Convert to Word, and

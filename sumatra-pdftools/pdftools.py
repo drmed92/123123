@@ -725,9 +725,10 @@ def settings():
     exe = sys.executable
     if os.name == 'nt' and os.path.exists(os.path.join(os.path.dirname(exe), 'pythonw.exe')):
         exe = os.path.join(os.path.dirname(exe), 'pythonw.exe')  # no console window flashing up
-    script = os.path.abspath(__file__)
+    # a PyInstaller exe is the whole program; otherwise run this script with Python
+    run = f'"{exe}"' if getattr(sys, 'frozen', False) else f'"{exe}" "{os.path.abspath(__file__)}"'
     return 'ExternalViewers [\n' + ''.join(
-        f'\t[\n\t\tCommandLine = "{exe}" "{script}" {name} "%1" %p\n'
+        f'\t[\n\t\tCommandLine = {run} {name} "%1" %p\n'
         f'\t\tName = PDF: {f.__doc__}\n\t\tFilter = *.pdf\n\t]\n' for name, f in COMMANDS.items()) + ']'
 
 
@@ -760,6 +761,14 @@ def main(argv):
 
 
 if __name__ == '__main__':
+    if getattr(sys, 'frozen', False) and len(sys.argv) == 1:
+        # double-clicked exe (no console): save the menu block next to it and say where
+        out = os.path.join(os.path.dirname(sys.executable), 'SumatraPDF-menu.txt')
+        with open(out, 'w', encoding='utf-8') as f:
+            f.write(settings())
+        show(f'Saved {out}\n\nIn SumatraPDF open Settings > Advanced Options, replace the line '
+             f'"ExternalViewers [ ]" with the contents of that file, save, and restart SumatraPDF.')
+        sys.exit(0)
     try:
         msg = main(sys.argv)
     except Exception as e:
