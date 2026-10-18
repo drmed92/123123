@@ -1,13 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="app.wablink"
-    android:versionCode="1"
-    android:versionName="1.0">
+    android:versionCode="2"
+    android:versionName="1.1">
 
     <uses-sdk android:minSdkVersion="27" android:targetSdkVersion="34" />
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!-- Android 11+ hides other apps; these let us see which ones are the default SMS app and dialer. -->
+    <queries>
+        <intent><action android:name="android.provider.Telephony.SMS_DELIVER" /></intent>
+        <intent><action android:name="android.intent.action.DIAL" /></intent>
+    </queries>
 
     <application
         android:label="WA Blink"

@@ -3,9 +3,15 @@ package app.wablink;
 /** Run with: java -ea (see build.sh). */
 public class BlinkStateCheck {
     public static void main(String[] args) {
-        assert BlinkState.isWhatsApp("com.whatsapp");
-        assert BlinkState.isWhatsApp("com.whatsapp.w4b");
-        assert !BlinkState.isWhatsApp("org.telegram.messenger");
+        String sms = "com.samsung.android.messaging", dialer = "com.samsung.android.dialer";
+        assert BlinkState.sourceOf("com.whatsapp", sms, dialer) == BlinkState.WHATSAPP;
+        assert BlinkState.sourceOf("com.whatsapp.w4b", sms, dialer) == BlinkState.WHATSAPP;
+        assert BlinkState.sourceOf("com.google.android.gm", sms, dialer) == BlinkState.GMAIL;
+        assert BlinkState.sourceOf(sms, sms, dialer) == BlinkState.SMS;
+        assert BlinkState.sourceOf(dialer, sms, dialer) == BlinkState.MISSED_CALL;
+        assert BlinkState.sourceOf("com.android.server.telecom", sms, dialer) == BlinkState.MISSED_CALL;
+        assert BlinkState.sourceOf("org.telegram.messenger", sms, dialer) == -1;
+        assert BlinkState.sourceOf("org.telegram.messenger", null, null) == -1 : "no default SMS/dialer app";
 
         BlinkState s = new BlinkState();
         assert s.shouldShow(true, false, false) : "unread + screen off -> blink";
