@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Green for the picker preview; at runtime setColorFilter (SRC_ATOP) repaints it with the AQI colour -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FFA8E05F" />
+    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+</shape>

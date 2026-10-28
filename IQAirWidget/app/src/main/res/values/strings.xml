@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">IQAir Widget</string>
+    <string name="widget_description">Air quality, temperature and humidity from IQAir. Tap to refresh.</string>
+</resources>
