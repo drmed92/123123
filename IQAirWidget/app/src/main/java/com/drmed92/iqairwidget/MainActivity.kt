@@ -16,6 +16,7 @@ import android.provider.Settings
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.RadioGroup
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
@@ -34,12 +35,22 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         prefs = Aqi.prefs(this)
-        // When opened from a widget's Settings, OK keeps the widget
+        // Opened for a widget (when placed, or from its Settings): OK keeps the widget, and it can pick what it shows
         val widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+        val forWidget = widgetId != AppWidgetManager.INVALID_APPWIDGET_ID
         setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
+        val mode = findViewById<RadioGroup>(R.id.mode)
+        val modeButtons = mapOf("out" to R.id.mode_out, "in" to R.id.mode_in, "both" to R.id.mode_both)
+        if (forWidget) {
+            mode.visibility = View.VISIBLE
+            mode.check(modeButtons.getValue(Aqi.mode(prefs, widgetId)))
+            sendBroadcast(Intent(this, UpdateReceiver::class.java)) // a newly placed widget gets no update of its own
+        }
 
         key = findViewById(R.id.key)
         key.setText(prefs.getString("key", ""))
+        val channel = findViewById<EditText>(R.id.channel)
+        channel.setText(prefs.getString("channel", ""))
 
         place = listOf("country", "state", "city").map { prefs.getString(it, "")!! }
         placeView = findViewById(R.id.place)
@@ -81,6 +92,7 @@ class MainActivity : Activity() {
         status = findViewById(R.id.status)
         showStatus()
         findViewById<Button>(R.id.save).setOnClickListener {
+            val newChannel = channel.text.toString().trim()
             prefs.edit()
                 .putString("key", key.text.toString().trim())
                 .putString("country", place[0])
@@ -88,12 +100,17 @@ class MainActivity : Activity() {
                 .putString("city", place[2])
                 .putInt("interval", interval.progress)
                 .putBoolean("notify", notify.isChecked)
+                .putString("channel", newChannel)
+                .also { if (forWidget) it.putString("mode_$widgetId", modeButtons.entries.first { e -> e.value == mode.checkedRadioButtonId }.key) }
+                // Another (or no) sensor: drop the old one's reading, it would otherwise pass as "Indoor"
+                .also { if (newChannel != prefs.getString("channel", "")) it.remove("in_last").remove("in_at").remove("in_error") }
                 .commit()
             status.text = "Updating…"
             thread {
                 Aqi.update(applicationContext, fetch = true)
                 runOnUiThread { showStatus() }
             }
+            if (forWidget) finish()
         }
     }
 
@@ -108,10 +125,12 @@ class MainActivity : Activity() {
     }
 
     private fun showStatus() {
-        val r = Aqi.reading(prefs)
+        fun line(r: Reading) = "${r.place}: AQI ${r.aqi} (${Aqi.label(r.aqi)}) · ${Aqi.weather(r)} · ${r.detail}"
         status.text = listOfNotNull(
-            r?.let { "${it.city}: AQI ${it.aqi} (${Aqi.label(it.aqi)}) · ${Aqi.weather(it)}" },
-            prefs.getString("error", null)?.let { "Last update failed: $it" },
+            Aqi.outdoor(prefs)?.let(::line),
+            prefs.getString("error", null)?.let { "Outdoor update failed: $it" },
+            Aqi.indoor(prefs)?.let(::line),
+            prefs.getString("in_error", null)?.let { "Indoor update failed: $it" },
         ).joinToString("\n")
     }
 

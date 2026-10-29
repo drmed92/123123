@@ -27,6 +27,8 @@ class UpdateReceiver : BroadcastReceiver() {
 open class AqiWidget : AppWidgetProvider() {
     override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) = kick(ctx)
 
+    override fun onDeleted(ctx: Context, ids: IntArray) = Aqi.prefs(ctx).edit().also { e -> ids.forEach { e.remove("mode_$it") } }.apply()
+
     // Last widget of this size removed: lets the receiver stop polling if nothing else needs data
     override fun onDisabled(ctx: Context) = kick(ctx)
 

@@ -10,6 +10,39 @@
         android:orientation="vertical"
         android:padding="20dp">
 
+        <!-- Shown only when opened for a specific widget -->
+        <RadioGroup
+            android:id="@+id/mode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="20dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="This widget shows"
+                android:textStyle="bold" />
+
+            <RadioButton
+                android:id="@+id/mode_out"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Outdoor (IQAir)" />
+
+            <RadioButton
+                android:id="@+id/mode_in"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Indoor (sensor)" />
+
+            <RadioButton
+                android:id="@+id/mode_both"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Indoor vs outdoor" />
+        </RadioGroup>
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -43,6 +76,27 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Choose city" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingTop="20dp"
+            android:text="Indoor sensor: ThingSpeak channel ID"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/channel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="e.g. 3427507"
+            android:importantForAutofill="no"
+            android:inputType="number"
+            android:singleLine="true" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Public channel with fields named pm2.5, pm10, co2, temp, hum. PM2.5 and PM10 become US AQI with the EPA formula IQAir uses; CO₂, temperature and humidity are shown as measured." />
 
         <TextView
             android:id="@+id/every"

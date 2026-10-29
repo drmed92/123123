@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">IQAir Widget</string>
-    <string name="widget_description">Air quality, temperature and humidity from IQAir. Tap to refresh.</string>
+    <string name="widget_description">Outdoor air quality from IQAir, your indoor sensor, or both side by side. Tap to refresh.</string>
 </resources>

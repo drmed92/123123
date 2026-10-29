@@ -17,6 +17,16 @@ class AqiTest {
     }
 
     @Test
+    fun convertsPmToUsAqiWithEpaBreakpoints() {
+        // Band edges of the 2024 EPA PM2.5 table, truncation to 0.1, and a mid-band value
+        val pm25 = listOf(0.0 to 0, 9.0 to 50, 9.05 to 50, 9.1 to 51, 12.0 to 56, 29.7 to 89, 35.4 to 100, 35.5 to 101,
+            55.4 to 150, 55.5 to 151, 125.4 to 200, 225.4 to 300, 325.4 to 500, -3.0 to 0)
+        for ((c, aqi) in pm25) assertEquals("PM2.5 $c", aqi, Aqi.aqiPm25(c))
+        val pm10 = listOf(0.0 to 0, 31.7 to 29, 54.0 to 50, 54.9 to 50, 55.0 to 51, 154.0 to 100, 155.0 to 101, 604.0 to 500)
+        for ((c, aqi) in pm10) assertEquals("PM10 $c", aqi, Aqi.aqiPm10(c))
+    }
+
+    @Test
     fun parsesIqairCityResponse() {
         // Sample from the IQAir API docs (GET /v2/city, Los Angeles)
         val data = JSONObject(
@@ -24,13 +34,26 @@ class AqiTest {
             "current":{"pollution":{"ts":"2025-09-08T08:00:00.000Z","aqius":36,"mainus":"p2","aqicn":19,"maincn":"p1"},
             "weather":{"ts":"2025-09-08T08:00:00.000Z","ic":"01n","hu":66,"pr":1017,"tp":20,"wd":146,"ws":1.57,"heatIndex":20}}}"""
         )
-        val r = Reading.parse(data)
+        val r = Reading.outdoor(data)
         assertEquals(36, r.aqi)
-        assertEquals("PM2.5", r.pollutant)
-        assertEquals(20, r.tempC)
-        assertEquals(66, r.humidity)
-        assertEquals(1.57, r.windMs, 0.0)
-        assertEquals("Los Angeles", r.city)
+        assertEquals("Los Angeles", r.place)
         assertEquals("20°C · 💧66%", Aqi.weather(r))
+        assertEquals("PM2.5 · 🌬 1.6 m/s", r.detail)
+    }
+
+    @Test
+    fun parsesThingSpeakIndoorSensor() {
+        // Shape of api.thingspeak.com/channels/3427507/feeds.json?results=1 (PMS7003 + CO2 sensor)
+        val json = JSONObject(
+            """{"channel":{"id":3427507,"name":"AirQuality","field1":"Pm1","field2":"pm2.5","field3":"pm10","field4":"co2",
+            "field5":"temp","field6":"hum"},
+            "feeds":[{"created_at":"2026-10-29T10:50:20Z","entry_id":96090,"field1":"17.7","field2":"29.7","field3":"31.7",
+            "field4":"871","field5":"26.7","field6":"50.2"}]}"""
+        )
+        val r = Reading.indoor(json)
+        assertEquals(89, r.aqi) // PM2.5 29.7 → 89 beats PM10 31.7 → 29
+        assertEquals("Indoor", r.place)
+        assertEquals("27°C · 💧50%", Aqi.weather(r))
+        assertEquals("CO₂ 871 ppm · PM2.5 29.7 µg/m³", r.detail)
     }
 }
