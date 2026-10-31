@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/xp_blue"
+    android:orientation="vertical">
+
+    <!-- caption bar: icon, title, close -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:background="@drawable/titlebar"
+        android:gravity="center_vertical"
+        android:paddingStart="6dp"
+        android:paddingEnd="5dp">
+
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_notepad" />
+
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:ellipsize="middle"
+            android:shadowColor="#0A1E6E"
+            android:shadowDx="1"
+            android:shadowDy="1"
+            android:shadowRadius="1"
+            android:singleLine="true"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/close"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:background="@drawable/close_btn"
+            android:contentDescription="Close"
+            android:gravity="center"
+            android:text="✕"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- menu bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/xp_face">
+
+        <TextView android:id="@+id/m_file" style="@style/MenuTitle" android:text="@string/file" />
+        <TextView android:id="@+id/m_edit" style="@style/MenuTitle" android:text="@string/edit" />
+        <TextView android:id="@+id/m_view" style="@style/MenuTitle" android:text="@string/view" />
+        <TextView android:id="@+id/m_help" style="@style/MenuTitle" android:text="@string/help" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#ACA899" />
+
+    <EditText
+        android:id="@+id/edit"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#FFFFFF"
+        android:gravity="top|start"
+        android:importantForAutofill="no"
+        android:inputType="textMultiLine|textNoSuggestions"
+        android:padding="6dp"
+        android:scrollbars="vertical|horizontal"
+        android:textColor="#000000"
+        android:textColorHighlight="#99316AC5"
+        android:typeface="monospace" />
+
+    <!-- status bar with page buttons, shown for large files and log following -->
+    <LinearLayout
+        android:id="@+id/pager"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/xp_face"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+
+        <TextView android:id="@+id/p_first" style="@style/XpButton" android:contentDescription="First page" android:text="|◄" />
+        <TextView android:id="@+id/p_prev" style="@style/XpButton" android:contentDescription="Previous page" android:text="◄" />
+        <TextView
+            android:id="@+id/p_info"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:singleLine="true"
+            android:textColor="#000000"
+            android:textSize="12sp" />
+        <TextView android:id="@+id/p_next" style="@style/XpButton" android:contentDescription="Next page" android:text="►" />
+        <TextView android:id="@+id/p_last" style="@style/XpButton" android:contentDescription="Last page" android:text="►|" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,37 @@
+<resources>
+    <color name="xp_blue">#0054E3</color>
+    <color name="xp_face">#ECE9D8</color>
+
+    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/xp_blue</item>
+        <item name="android:colorAccent">#316AC5</item>
+        <item name="android:statusBarColor">@color/xp_blue</item>
+        <item name="android:navigationBarColor">@color/xp_blue</item>
+        <item name="android:windowBackground">@color/xp_blue</item>
+    </style>
+
+    <style name="MenuTitle">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">12dp</item>
+        <item name="android:paddingTop">7dp</item>
+        <item name="android:paddingBottom">7dp</item>
+        <item name="android:textColor">#000000</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:background">@drawable/menu_title_bg</item>
+    </style>
+
+    <style name="XpButton">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">30dp</item>
+        <item name="android:minWidth">40dp</item>
+        <item name="android:layout_margin">3dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:paddingEnd">8dp</item>
+        <item name="android:textColor">#000000</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:background">@drawable/xp_button</item>
+    </style>
+</resources>

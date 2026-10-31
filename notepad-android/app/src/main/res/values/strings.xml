@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Classic Notepad</string>
+    <!-- underlined access letters, like the old Windows menu bar -->
+    <string name="file"><u>F</u>ile</string>
+    <string name="edit"><u>E</u>dit</string>
+    <string name="view"><u>V</u>iew</string>
+    <string name="help"><u>H</u>elp</string>
+</resources>

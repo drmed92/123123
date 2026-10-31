@@ -1,0 +1,34 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'io.github.drmed92.notepad'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'io.github.drmed92.notepad'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName '1.0'
+    }
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+        }
+    }
+    testOptions {
+        unitTests.includeAndroidResources = true
+        // Robolectric on JDK 17+
+        unitTests.all { jvmArgs '--add-opens=java.base/jdk.internal.access=ALL-UNNAMED', '--add-exports=java.base/jdk.internal.access=ALL-UNNAMED' }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.17'
+}
