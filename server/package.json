@@ -5,7 +5,8 @@
   "description": "ERemote central server: MQTT broker + claim API + per-device web control pages",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js"
+    "start": "node app.js",
+    "test": "node --test test/protocol.test.js"
   },
   "engines": { "node": ">=18" },
   "dependencies": {

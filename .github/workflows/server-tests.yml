@@ -1,0 +1,35 @@
+name: Server tests
+
+# Runs the ERemote protocol tests (server/test/protocol.test.js) whenever the
+# server or the device<->server contract changes. Nothing here deploys anything.
+on:
+  push:
+    branches: [main]
+    paths: ['server/**', 'ERemote/PROTOCOL.md', '.github/workflows/server-tests.yml']
+  pull_request:
+    paths: ['server/**', 'ERemote/PROTOCOL.md', '.github/workflows/server-tests.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: server-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  protocol:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]          # production VPS installs Node 20 (see server/deploy.md)
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm test
